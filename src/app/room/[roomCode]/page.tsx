@@ -831,10 +831,8 @@ export default function RoomPage({ params }: { params: Promise<{ roomCode: strin
   }
 
   return (
-    <RoomProvider>
-      <main className="flex flex-col min-h-screen">
-        <RoomContent roomCode={roomCode} />
-      </main>
-    </RoomProvider>
+    <main className="flex flex-col min-h-screen">
+      <RoomContent roomCode={roomCode} />
+    </main>
   );
 }

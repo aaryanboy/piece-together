@@ -133,8 +133,6 @@ function JoinRoomForm() {
 
 export default function JoinPage() {
   return (
-    <RoomProvider>
-      <JoinRoomForm />
-    </RoomProvider>
+    <JoinRoomForm />
   );
 }

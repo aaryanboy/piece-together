@@ -18,13 +18,19 @@ export const metadata: Metadata = {
     "Assemble beautiful jigsaw puzzles in real-time with friends. Create a room, share the code, and piece it together!",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+import { RoomProvider } from "@/context/RoomContext";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <RoomProvider>
+          {children}
+        </RoomProvider>
+      </body>
     </html>
   );
 }

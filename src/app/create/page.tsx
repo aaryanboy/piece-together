@@ -205,8 +205,6 @@ function CreateRoomForm() {
 
 export default function CreatePage() {
   return (
-    <RoomProvider>
-      <CreateRoomForm />
-    </RoomProvider>
+    <CreateRoomForm />
   );
 }
