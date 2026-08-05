@@ -10,8 +10,10 @@ import { PuzzleConfig } from '../../src/types/puzzle';
 export function registerRoomHandlers(io: Server, socket: Socket) {
   // CREATE ROOM
   socket.on('create_room', ({ playerName, avatar, maxPlayers }, callback) => {
+    console.log(`[Server] create_room from socket ${socket.id}: name=${playerName}, maxPlayers=${maxPlayers}`);
     try {
       const code = generateRoomCode();
+      console.log(`[Server] Generated room code: ${code}`);
       const color = PLAYER_COLORS[0];
       const host: Player = {
         id: socket.id,
@@ -51,24 +53,30 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
       dbStore.saveRoom(room);
 
       socket.join(code);
+      console.log(`[Server] ✅ Room ${code} created by ${playerName} (${socket.id})`);
       callback({ success: true, roomCode: code });
     } catch (e: any) {
+      console.error(`[Server] ❌ create_room error:`, e);
       callback({ success: false, error: e.message || 'Failed to create room' });
     }
   });
 
   // JOIN ROOM
   socket.on('join_room', ({ roomCode, playerName, avatar }, callback) => {
+    console.log(`[Server] join_room from socket ${socket.id}: code=${roomCode}, name=${playerName}`);
     try {
       const upperCode = roomCode.toUpperCase();
       let room = roomStore.getRoom(upperCode);
 
       if (!room) {
+        console.warn(`[Server] ⚠️ Room ${upperCode} not found`);
         return callback({ success: false, error: 'Room not found. Check code and try again.' });
       }
 
       const currentPlayers = Object.keys(room.players);
+      console.log(`[Server] Room ${upperCode}: ${currentPlayers.length}/${room.maxPlayers} players, status: ${room.status}`);
       if (currentPlayers.length >= room.maxPlayers && !room.players[socket.id]) {
+        console.warn(`[Server] ⚠️ Room ${upperCode} is full`);
         return callback({ success: false, error: 'Room is full.' });
       }
 
@@ -103,8 +111,10 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
       room.chat.push(systemMessage);
       io.to(upperCode).emit('chat_message', systemMessage);
 
+      console.log(`[Server] ✅ ${playerName} (${socket.id}) joined room ${upperCode}`);
       callback({ success: true, room });
     } catch (e: any) {
+      console.error(`[Server] ❌ join_room error:`, e);
       callback({ success: false, error: e.message || 'Failed to join room' });
     }
   });
@@ -112,8 +122,12 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
   // START GAME
   socket.on('start_game', ({ roomCode }) => {
     const upperCode = roomCode.toUpperCase();
+    console.log(`[Server] start_game from socket ${socket.id}: room=${upperCode}`);
     const room = roomStore.getRoom(upperCode);
-    if (!room || room.hostId !== socket.id || !room.config) return;
+    if (!room || room.hostId !== socket.id || !room.config) {
+      console.warn(`[Server] ⚠️ start_game rejected: room=${!!room}, isHost=${room?.hostId === socket.id}, hasConfig=${!!room?.config}`);
+      return;
+    }
 
     room.status = 'playing';
     room.startedAt = Date.now();
@@ -121,6 +135,7 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
 
     // Generate puzzle pieces layout
     room.pieces = generatePuzzlePieces(room.config);
+    console.log(`[Server] ✅ Game started in room ${upperCode}: ${room.pieces.length} pieces generated`);
 
     roomStore.setRoom(upperCode, room);
     dbStore.saveRoom(room);
@@ -136,13 +151,18 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
   // UPDATE SETTINGS
   socket.on('update_settings', ({ roomCode, config }) => {
     const upperCode = roomCode.toUpperCase();
+    console.log(`[Server] update_settings from socket ${socket.id}: room=${upperCode}, image=${config?.imageTitle}`);
     const room = roomStore.getRoom(upperCode);
-    if (!room || room.hostId !== socket.id) return;
+    if (!room || room.hostId !== socket.id) {
+      console.warn(`[Server] ⚠️ update_settings rejected: room=${!!room}, isHost=${room?.hostId === socket.id}`);
+      return;
+    }
 
     room.config = config;
     roomStore.setRoom(upperCode, room);
     dbStore.saveRoom(room);
 
+    console.log(`[Server] ✅ Settings updated for room ${upperCode}`);
     io.to(upperCode).emit('room_updated', room);
   });
 
