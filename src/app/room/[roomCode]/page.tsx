@@ -14,23 +14,23 @@ import { ChatMessage, Player } from "@/types/room";
  * PALETTE — warm parchment board, visible pieces
  * ────────────────────────────────────────────────────────── */
 const C = {
-  pageBg: "#E8E0D4",           // warm parchment page background
-  boardBg: "#D4C9B8",           // puzzle mat / cork board
-  boardBorder: "#B8A88C",       // wood-like border
-  panel: "#1A2332",             // dark HUD panels (on light bg)
+  pageBg: "#E8E0D4",
+  boardBg: "#D4C9B8",
+  boardBorder: "#B8A88C",
+  panel: "#1A2332",
   coral: "#FF6B4A",
   gold: "#F4B942",
   paper: "#F5EFE0",
-  ink: "#2A2A2A",               // dark text
+  ink: "#2A2A2A",
   muted: "#6B6B6B",
   mint: "#34D399",
-  pieceBorder: "rgba(40,30,20,0.35)", // visible on light bg
+  pieceBorder: "rgba(40,30,20,0.35)",
   pieceActive: "#FF6B4A",
   piecePlaced: "#34D399",
 };
 
 /* ──────────────────────────────────────────────────────────
- * LOBBY VIEW (unchanged structure, palette updated)
+ * LOBBY VIEW
  * ────────────────────────────────────────────────────────── */
 function LobbyView({ roomCode }: { roomCode: string }) {
   const { room, player, startGame, isConnected, leaveRoom, sendChatMessage } = useRoom();
@@ -65,21 +65,19 @@ function LobbyView({ roomCode }: { roomCode: string }) {
   return (
     <div className="flex flex-1 items-center justify-center px-6 py-10 sm:py-14" style={{ background: C.pageBg, color: C.ink }}>
       <div className="w-full max-w-2xl space-y-5">
-        {/* Room Code */}
         <div className="fade-up text-center" style={{ animationDelay: "0ms" }}>
           <p className="section-label !mb-3 justify-center" style={{ color: C.muted }}>Room code</p>
           <button onClick={copyCode} className="code-chip group">
             <span className="jb-mono text-2xl font-bold tracking-[0.2em] sm:text-3xl" style={{ color: C.ink }}>
               {roomCode}
             </span>
-            <span className={`copy-flag ${copied ? "copy-flag-active" : ""}`}>
+            <span className={"copy-flag " + (copied ? "copy-flag-active" : "")}>
               {copied ? "Copied" : "Copy"}
             </span>
           </button>
           <p className="mt-2.5 text-xs" style={{ color: C.muted }}>Share this code with friends to join</p>
         </div>
 
-        {/* Puzzle preview */}
         {room.config && (
           <div className="fade-up flex items-center gap-4" style={{ animationDelay: "70ms" }}>
             <img
@@ -91,13 +89,12 @@ function LobbyView({ roomCode }: { roomCode: string }) {
             <div>
               <p className="text-sm font-medium" style={{ color: C.ink }}>{room.config.imageTitle}</p>
               <p className="jb-mono mt-0.5 text-[11px] uppercase tracking-wide" style={{ color: C.muted }}>
-                {room.config.totalPieces} pcs · {room.config.rows}×{room.config.cols} · up to {room.maxPlayers} players
+                {room.config.totalPieces} pcs &middot; {room.config.rows}&times;{room.config.cols} &middot; up to {room.maxPlayers} players
               </p>
             </div>
           </div>
         )}
 
-        {/* Players */}
         <div className="fade-up" style={{ animationDelay: "140ms" }}>
           <div className="mb-3 flex items-center justify-between">
             <label className="section-label !mb-0" style={{ color: C.muted }}>
@@ -133,7 +130,6 @@ function LobbyView({ roomCode }: { roomCode: string }) {
           </div>
         </div>
 
-        {/* Chat */}
         <div className="fade-up" style={{ animationDelay: "210ms" }}>
           <label className="section-label" style={{ color: C.muted }}>Chat</label>
           <div className="chat-scroll h-28 space-y-1.5 overflow-y-auto rounded-xl border p-3 pr-1" style={{ background: "rgba(0,0,0,0.02)", borderColor: "rgba(0,0,0,0.08)" }}>
@@ -168,7 +164,6 @@ function LobbyView({ roomCode }: { roomCode: string }) {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="fade-up flex gap-3 pt-1" style={{ animationDelay: "280ms" }}>
           <button onClick={handleLeave} className="btn-piece btn-piece-ghost flex-1 justify-center">Leave room</button>
           {isHost ? (
@@ -189,7 +184,7 @@ function LobbyView({ roomCode }: { roomCode: string }) {
 }
 
 /* ──────────────────────────────────────────────────────────
- * GAME VIEW — Overhauled: visible board, free pan, piece borders
+ * GAME VIEW
  * ────────────────────────────────────────────────────────── */
 function GameView({ roomCode }: { roomCode: string }) {
   const { room, socket, sendChatMessage } = useRoom();
@@ -309,7 +304,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     });
   }, [pieces]);
 
-  // Load puzzle image
   useEffect(() => {
     if (!room?.config?.imageUrl) return;
     const img = new Image();
@@ -317,7 +311,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     img.onload = () => {
       imageRef.current = img;
       setImageLoaded(true);
-      // Center the board initially
       const canvas = canvasRef.current;
       if (canvas && room?.config) {
         const rect = canvas.getBoundingClientRect();
@@ -332,7 +325,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     img.src = room.config.imageUrl;
   }, [room?.config?.imageUrl]);
 
-  // Recenter on resize
   useEffect(() => {
     function onResize() {
       const canvas = canvasRef.current;
@@ -340,10 +332,8 @@ function GameView({ roomCode }: { roomCode: string }) {
       const rect = canvas.getBoundingClientRect();
       const bx = room.config.boardWidth;
       const by = room.config.boardHeight;
-      // Only recenter if user hasn't panned much (heuristic)
       const cx = rect.width / 2 - bx / 2;
       const cy = rect.height / 2 - by / 2;
-      // Soft recenter — don't snap, just drift toward center if close
       const dx = cx - offsetRef.current.x;
       const dy = cy - offsetRef.current.y;
       if (Math.hypot(dx, dy) < 100) {
@@ -354,7 +344,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     return () => window.removeEventListener("resize", onResize);
   }, [room?.config, imageLoaded]);
 
-  // Cursor updates
   useEffect(() => {
     if (!socket) return;
     function onCursorUpdated({ playerId, x, y }: { playerId: string; x: number; y: number }) {
@@ -364,7 +353,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     return () => { socket.off("cursor_updated", onCursorUpdated); };
   }, [socket]);
 
-  // ─── Canvas render loop ───
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -389,21 +377,18 @@ function GameView({ roomCode }: { roomCode: string }) {
 
     const boardX = 0;
     const boardY = 0;
-
-    // 1) BOARD BACKGROUND — visible mat with border
     const matPad = 24;
+
+    // Board background with border
     ctx.save();
-    // Outer wood border
     ctx.fillStyle = C.boardBorder;
     ctx.beginPath();
     ctx.roundRect(boardX - matPad - 4, boardY - matPad - 4, config.boardWidth + (matPad + 4) * 2, config.boardHeight + (matPad + 4) * 2, 20);
     ctx.fill();
-    // Inner cork/mat
     ctx.fillStyle = C.boardBg;
     ctx.beginPath();
     ctx.roundRect(boardX - matPad, boardY - matPad, config.boardWidth + matPad * 2, config.boardHeight + matPad * 2, 16);
     ctx.fill();
-    // Subtle texture dots
     ctx.fillStyle = "rgba(0,0,0,0.04)";
     for (let i = 0; i < config.boardWidth + matPad * 2; i += 18) {
       for (let j = 0; j < config.boardHeight + matPad * 2; j += 18) {
@@ -412,7 +397,7 @@ function GameView({ roomCode }: { roomCode: string }) {
     }
     ctx.restore();
 
-    // 2) BOARD OUTLINE — target area
+    // Board outline
     ctx.save();
     ctx.strokeStyle = "rgba(0,0,0,0.18)";
     ctx.lineWidth = 2;
@@ -421,7 +406,7 @@ function GameView({ roomCode }: { roomCode: string }) {
     ctx.setLineDash([]);
     ctx.restore();
 
-    // 3) GRID LINES
+    // Grid lines
     const pw = config.boardWidth / config.cols;
     const ph = config.boardHeight / config.rows;
     ctx.save();
@@ -441,7 +426,7 @@ function GameView({ roomCode }: { roomCode: string }) {
     }
     ctx.restore();
 
-    // 4) PIECES — with strong visible borders
+    // Pieces
     const sortedPieces = [...pieces].sort((a, b) => {
       if (a.isPlaced !== b.isPlaced) return a.isPlaced ? -1 : 1;
       if (a.id === activePieceId) return 1;
@@ -483,7 +468,6 @@ function GameView({ roomCode }: { roomCode: string }) {
       const sh = srcPh + srcOverflowY * 2;
       ctx.drawImage(img, sx, sy, sw, sh, -tabOverflow, -tabOverflow, pw + tabOverflow * 2, ph + tabOverflow * 2);
 
-      // Inner shadow for depth
       ctx.save();
       ctx.shadowColor = "rgba(0,0,0,0.15)";
       ctx.shadowBlur = 6;
@@ -497,7 +481,7 @@ function GameView({ roomCode }: { roomCode: string }) {
 
       ctx.restore();
 
-      // ─── PIECE BORDER — always visible ───
+      // Piece border — always visible
       ctx.save();
       ctx.translate(piece.currentX, piece.currentY);
       applyPop(popScale);
@@ -520,7 +504,6 @@ function GameView({ roomCode }: { roomCode: string }) {
         ctx.shadowColor = popT < 1 ? C.gold : "rgba(52,211,153,0.3)";
         ctx.shadowBlur = popT < 1 ? 10 : 4;
       } else {
-        // Strong dark border so pieces are visible on light bg
         ctx.strokeStyle = C.pieceBorder;
         ctx.lineWidth = 1.8;
         ctx.shadowColor = "rgba(0,0,0,0.12)";
@@ -532,7 +515,7 @@ function GameView({ roomCode }: { roomCode: string }) {
       ctx.restore();
     }
 
-    // 5) OTHER PLAYERS' CURSORS
+    // Other players' cursors
     if (room.players) {
       for (const [pid, pos] of Object.entries(cursors)) {
         if (pid === socket.id) continue;
@@ -563,7 +546,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     }
   }, [pieces, activePieceId, room, cursors, socket]);
 
-  // Animation loop
   useEffect(() => {
     function tick() {
       renderCanvas();
@@ -575,7 +557,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
   }, [imageLoaded, renderCanvas]);
 
-  // ─── Input helpers ───
   function getCanvasPos(e: React.MouseEvent | React.TouchEvent): { x: number; y: number } {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
@@ -602,7 +583,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     return null;
   }
 
-  // Zoom
   function handleWheelZoom(e: WheelEvent) {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.92 : 1.08;
@@ -623,7 +603,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     return () => canvas.removeEventListener("wheel", handleWheelZoom);
   }, []);
 
-  // Mouse
   function onPointerDown(e: React.MouseEvent) {
     if (e.button === 2 || e.button === 1) {
       isPanning.current = true;
@@ -633,7 +612,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     const pos = getCanvasPos(e);
     const piece = findPieceAt(pos.x, pos.y);
     if (!piece) {
-      // Click on empty board = start panning too (easier UX)
       isPanning.current = true;
       lastPanPos.current = { x: e.clientX, y: e.clientY };
       return;
@@ -665,7 +643,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     isDragging.current = false;
   }
 
-  // Touch
   function touchDist(t1: React.Touch, t2: React.Touch) { return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY); }
   function touchMid(t1: React.Touch, t2: React.Touch, rect: DOMRect) { return { x: (t1.clientX + t2.clientX) / 2 - rect.left, y: (t1.clientY + t2.clientY) / 2 - rect.top }; }
 
@@ -739,7 +716,6 @@ function GameView({ roomCode }: { roomCode: string }) {
     }
   }
 
-  // Timer
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (!room?.startedAt || room.status === "completed") return;
@@ -757,7 +733,6 @@ function GameView({ roomCode }: { roomCode: string }) {
 
   return (
     <div className="relative h-dvh w-full overflow-hidden" style={{ background: C.pageBg, color: C.ink }}>
-      {/* Canvas */}
       <div ref={containerRef} className="absolute inset-0">
         <canvas
           ref={canvasRef}
@@ -774,7 +749,7 @@ function GameView({ roomCode }: { roomCode: string }) {
         />
       </div>
 
-      {/* ─── TOP BAR: Timer only, centered, minimal ─── */}
+      {/* Top center: timer + progress */}
       <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2">
         <div className="hud-pill flex items-center gap-3 px-4 py-2">
           <span className="jb-mono text-lg font-semibold tracking-wider" style={{ color: C.ink }}>{formatTime(elapsed)}</span>
@@ -788,12 +763,12 @@ function GameView({ roomCode }: { roomCode: string }) {
         </div>
       </div>
 
-      {/* ─── TOP-LEFT: small home link (not a header) ─── */}
+      {/* Top left: home */}
       <div className="absolute left-3 top-3 z-20 sm:left-5 sm:top-5">
         <Link href="/" className="hud-pill group !px-2.5 !py-2 text-lg hover:scale-105 transition-transform">🧩</Link>
       </div>
 
-      {/* ─── TOP-RIGHT: player avatars ─── */}
+      {/* Top right: avatars */}
       <div className="absolute right-3 top-3 z-20 hidden items-center gap-2 sm:right-5 sm:top-5 sm:flex">
         <div className="hud-pill !gap-0">
           <div className="flex -space-x-2">
@@ -806,7 +781,7 @@ function GameView({ roomCode }: { roomCode: string }) {
         </div>
       </div>
 
-      {/* ─── BOTTOM CENTER: Reference image toggle (prominent, not corner) ─── */}
+      {/* Bottom center: reference + center button */}
       <div className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2 flex items-center gap-3">
         <button
           onClick={() => setShowRef((v) => !v)}
@@ -817,7 +792,6 @@ function GameView({ roomCode }: { roomCode: string }) {
         </button>
         <button
           onClick={() => {
-            // Reset view to center
             if (room?.config) {
               const canvas = canvasRef.current;
               if (canvas) {
@@ -838,14 +812,13 @@ function GameView({ roomCode }: { roomCode: string }) {
         </button>
       </div>
 
-      {/* Reference image popup */}
       {showRef && (
         <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-2xl border bg-white p-2 shadow-2xl" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
           <img src={room?.config?.imageUrl} className="w-48 rounded-xl sm:w-56" alt="Reference" />
         </div>
       )}
 
-      {/* ─── CHAT SIDEBAR (desktop) ─── */}
+      {/* Chat sidebar desktop */}
       <div className={`absolute bottom-0 right-0 top-0 z-20 hidden w-72 flex-col border-l transition-transform duration-300 sm:flex ${chatOpen ? "translate-x-0" : "translate-x-full"}`} style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)", borderColor: "rgba(0,0,0,0.08)" }}>
         <div className="flex items-center justify-between border-b p-3" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
           <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Chat</h3>
@@ -876,7 +849,7 @@ function GameView({ roomCode }: { roomCode: string }) {
         </div>
       </div>
 
-      {/* ─── CHAT MOBILE BOTTOM SHEET ─── */}
+      {/* Chat mobile */}
       <div className={`absolute inset-x-0 bottom-0 z-30 flex max-h-[65vh] flex-col rounded-t-3xl border-t transition-transform duration-300 sm:hidden ${chatOpen ? "translate-y-0" : "translate-y-full"}`} style={{ background: "rgba(255,255,255,0.92)", backdropFilter: "blur(12px)", borderColor: "rgba(0,0,0,0.08)" }}>
         <div className="flex items-center justify-between border-b p-4" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
           <h3 className="text-base font-semibold" style={{ color: C.ink }}>Chat</h3>
@@ -907,7 +880,7 @@ function GameView({ roomCode }: { roomCode: string }) {
         </div>
       </div>
 
-      {/* Chat FAB — visible, colored, not hiding in corner */}
+      {/* Chat FAB */}
       <button
         onClick={() => setChatOpen(!chatOpen)}
         className="absolute right-5 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full text-xl shadow-lg transition-transform hover:scale-110 active:scale-95"
@@ -1043,10 +1016,10 @@ function GameView({ roomCode }: { roomCode: string }) {
 }
 
 /* ──────────────────────────────────────────────────────────
- * ROOM PAGE — State-driven Lobby ↔ Game
+ * ROOM PAGE
  * ────────────────────────────────────────────────────────── */
 function RoomContent({ roomCode }: { roomCode: string }) {
-  const { room, joinRoom, isConnected, socket } = useRoom();
+  const { room, joinRoom, isConnected } = useRoom();
   const router = useRouter();
   const [joining, setJoining] = useState(false);
   const hasJoined = useRef(false);
@@ -1056,8 +1029,9 @@ function RoomContent({ roomCode }: { roomCode: string }) {
     if (room && room.code === roomCode) { hasJoined.current = true; return; }
     if (!room && !joining) {
       setJoining(true); hasJoined.current = true;
-      joinRoom(roomCode, \`Player-\${Math.floor(Math.random() * 1000)}\`, "🧩").catch(() => {
-        router.push(\`/join?code=\${roomCode}\`);
+      const randomName = "Player-" + Math.floor(Math.random() * 1000);
+      joinRoom(roomCode, randomName, "🧩").catch(() => {
+        router.push("/join?code=" + roomCode);
       });
     }
   }, [isConnected, room, roomCode, router, joinRoom, joining]);
