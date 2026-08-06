@@ -28,6 +28,9 @@ export interface ServerToClientEvents {
   piece_unlocked: (data: { pieceId: number }) => void;
   piece_moved: (data: { pieceId: number; x: number; y: number; groupIds?: number[] }) => void;
   pieces_snapped: (data: { pieceIds: number[]; targetX: number; targetY: number; groupId: number; isPlaced: boolean; progressPercent: number }) => void;
+  // Server rejected a snap attempt because a piece wasn't within tolerance of its
+  // own correct target (board placement) or its correct neighbor offset (group merge).
+  snap_rejected: (data: { pieceIds: number[]; reason: 'not-correct-spot' | 'not-neighbors' }) => void;
   game_completed: (data: { completedAt: number; durationSeconds: number }) => void;
   cursor_updated: (data: { playerId: string; x: number; y: number }) => void;
   chat_message: (message: ChatMessage) => void;
