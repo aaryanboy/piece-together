@@ -37,102 +37,157 @@ function JoinRoomForm() {
   }
 
   return (
-    <main className="flex-1 flex flex-col">
-      {/* Ambient Background */}
-      <div className="fixed inset-0 -z-10">
-        <div className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-indigo-600/10 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-purple-600/10 blur-[100px]" />
+    <main className="pt-app relative flex h-dvh w-full flex-col overflow-hidden bg-[#0F1C2E] text-[#F5EFE0]">
+      {/* ambient glow — one accent, kept quiet */}
+      <div className="pointer-events-none fixed -left-24 -top-32 h-[420px] w-[420px] rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
+      <div className="pointer-events-none fixed -bottom-24 -right-16 h-[380px] w-[380px] rounded-full bg-[#F4B942]/8 blur-[100px]" />
+
+      {/* floating brand mark — not a header bar */}
+      <Link
+        href="/"
+        className="group absolute left-5 top-5 z-20 flex items-center gap-1.5 sm:left-8 sm:top-6"
+      >
+        <span className="text-lg transition-transform group-hover:scale-110">🧩</span>
+        <span className="font-display hidden text-sm font-semibold text-[#F5EFE0]/80 sm:inline">
+          Piece Together
+        </span>
+      </Link>
+
+      {/* floating connection pill — not a header bar */}
+      <div className="absolute right-5 top-5 z-20 flex items-center gap-1.5 sm:right-8 sm:top-6">
+        <span
+          className="inline-block h-1.5 w-1.5 rounded-full"
+          style={{ background: isConnected ? "#34D399" : "#FF6B4A" }}
+        />
+        <span className="jb-mono text-[11px] uppercase tracking-wider text-[#8A96AE]">
+          {isConnected ? "Connected" : "Connecting…"}
+        </span>
       </div>
 
-      {/* Nav */}
-      <nav className="relative z-10 flex items-center justify-between px-8 py-5">
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <span className="text-3xl group-hover:scale-110 transition-transform">🧩</span>
-          <span className="text-xl font-bold text-gradient">Piece Together</span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <span
-            className={`inline-block w-2 h-2 rounded-full ${
-              isConnected ? "bg-emerald-400" : "bg-red-400"
-            }`}
-          />
-          <span className="text-xs text-slate-500">
-            {isConnected ? "Connected" : "Connecting..."}
-          </span>
-        </div>
-      </nav>
-
-      <section className="flex-1 flex items-center justify-center px-6 py-10">
-        <div className="w-full max-w-md space-y-8">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold">
-              Join a <span className="text-gradient">Puzzle Room</span>
+      <div className="relative z-10 flex flex-1 items-center justify-center px-6">
+        <div className="w-full max-w-sm">
+          <div className="mb-8 text-center">
+            <span className="jb-mono text-[11px] uppercase tracking-[0.28em] text-[#F4B942]">
+              Join Room
+            </span>
+            <h1 className="font-display mt-2 text-3xl font-semibold leading-tight sm:text-4xl">
+              Hop into a <span className="italic text-[#FF6B4A]">puzzle</span>
             </h1>
-            <p className="text-slate-400 mt-2">
+            <p className="mt-2 text-[15px] text-[#A8ADC4]">
               Enter the room code shared by your host
             </p>
           </div>
 
           {error && (
-            <div className="glass-card rounded-xl p-4 border-red-500/30 text-red-300 text-sm text-center">
+            <div className="mb-5 rounded-full border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 px-4 py-2 text-center text-xs text-[#FFB4A0]">
               {error}
             </div>
           )}
 
-          <div className="glass-panel rounded-2xl p-8 space-y-6">
-            {/* Player Name */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-300">
-                Your Name
-              </label>
+          <div className="flex flex-col gap-6">
+            <div>
+              <label className="section-label">Your Name</label>
               <input
                 type="text"
-                placeholder="Enter your display name..."
+                placeholder="Enter your display name…"
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
-                className="w-full bg-slate-800/60 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-all"
+                className="field-minimal"
                 maxLength={20}
               />
             </div>
 
-            {/* Room Code */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-300">
-                Room Code
-              </label>
+            <div>
+              <label className="section-label">Room Code</label>
               <input
                 type="text"
-                placeholder="e.g. HAPPY-PUZZLE-742"
+                placeholder="HAPPY-PUZZLE-742"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                className="w-full bg-slate-800/60 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 transition-all font-mono text-center text-lg tracking-wider"
+                className="field-minimal jb-mono text-center tracking-[0.15em]"
               />
             </div>
 
-            {/* Join Button */}
             <button
               onClick={handleJoin}
               disabled={isJoining || !isConnected}
-              className="w-full py-4 rounded-2xl font-semibold text-white bg-gradient-glow shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all duration-300 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="btn-piece btn-piece-primary mt-2 w-full justify-center py-3.5 text-[15px] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isJoining ? "Joining..." : "🔗 Join Room"}
+              {isJoining ? "Joining room…" : "Join room"}
             </button>
           </div>
 
-          <p className="text-center text-sm text-slate-500">
+          <p className="mt-6 text-center text-sm text-[#6C7A94]">
             Don&apos;t have a code?{" "}
-            <Link href="/create" className="text-indigo-400 hover:text-indigo-300 underline">
+            <Link href="/create" className="text-[#FF6B4A] underline decoration-[#FF6B4A]/40 underline-offset-4 hover:decoration-[#FF6B4A]">
               Create your own room
             </Link>
           </p>
         </div>
-      </section>
+      </div>
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        .pt-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+        .font-display { font-family: 'Fraunces', serif; font-optical-sizing: auto; }
+        .jb-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+        .section-label {
+          display: block;
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.14em;
+          color: #8A96AE;
+          margin-bottom: 0.6rem;
+        }
+
+        .field-minimal {
+          width: 100%;
+          background: transparent;
+          border: none;
+          border-bottom: 1.5px solid rgba(245,239,224,0.16);
+          padding: 0.5rem 0.1rem 0.7rem;
+          font-size: 1.05rem;
+          color: #F5EFE0;
+          transition: border-color 0.2s ease;
+        }
+        .field-minimal::placeholder { color: #5C6A85; }
+        .field-minimal:focus { outline: none; border-color: #FF6B4A; }
+
+        .btn-piece {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.85rem 1.6rem 0.85rem 2rem;
+          border-radius: 14px;
+          font-weight: 600;
+          transition: transform 0.25s ease, box-shadow 0.25s ease;
+          white-space: nowrap;
+        }
+        .btn-piece::before {
+          content: "";
+          position: absolute;
+          left: -7px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 15px;
+          height: 15px;
+          border-radius: 50%;
+        }
+        .btn-piece-primary { background: #FF6B4A; color: #0F1C2E; }
+        .btn-piece-primary::before { background: #FF6B4A; }
+        .btn-piece-primary:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 28px -10px rgba(255,107,74,0.65);
+        }
+      `}</style>
     </main>
   );
 }
 
 export default function JoinPage() {
-  return (
-    <JoinRoomForm />
-  );
+  return <JoinRoomForm />;
 }
