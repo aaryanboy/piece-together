@@ -4,11 +4,10 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import confetti from "canvas-confetti";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { RoomProvider, useRoom } from "@/context/RoomContext";
+import { useRoom } from "@/context/RoomContext";
 import { usePuzzleState } from "@/hooks/usePuzzleState";
 import { drawPiecePath } from "@/lib/puzzleGenerator";
 import { PuzzlePieceData } from "@/types/puzzle";
-import { ChatMessage, Player } from "@/types/room";
 
 /* ──────────────────────────────────────────────────────────
  * PALETTE — warm parchment board, visible pieces
@@ -426,10 +425,11 @@ function GameView({ roomCode }: { roomCode: string }) {
     }
     ctx.restore();
 
-    // Pieces
+    // PIECES — FIX: active piece always on top
     const sortedPieces = [...pieces].sort((a, b) => {
       if (a.isPlaced !== b.isPlaced) return a.isPlaced ? -1 : 1;
       if (a.id === activePieceId) return 1;
+      if (b.id === activePieceId) return -1;
       return 0;
     });
     stackOrderRef.current = sortedPieces;
@@ -567,16 +567,22 @@ function GameView({ roomCode }: { roomCode: string }) {
     return { x, y };
   }
 
+  // FIX: tight hit-testing so tabs don't steal clicks
   function findPieceAt(x: number, y: number): PuzzlePieceData | null {
     if (!room?.config) return null;
     const pw = room.config.boardWidth / room.config.cols;
     const ph = room.config.boardHeight / room.config.rows;
-    const pad = Math.min(pw, ph) * 0.15;
+    const pad = 2; // was 0.15 * min(pw,ph) — way too fat
     const order = stackOrderRef.current.length ? stackOrderRef.current : pieces;
     for (let i = order.length - 1; i >= 0; i--) {
       const piece = order[i];
       if (piece.isPlaced) continue;
-      if (x >= piece.currentX - pad && x <= piece.currentX + pw + pad && y >= piece.currentY - pad && y <= piece.currentY + ph + pad) {
+      if (
+        x >= piece.currentX - pad &&
+        x <= piece.currentX + pw + pad &&
+        y >= piece.currentY - pad &&
+        y <= piece.currentY + ph + pad
+      ) {
         return piece;
       }
     }
