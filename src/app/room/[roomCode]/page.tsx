@@ -10,6 +10,18 @@ import { drawPiecePath } from "@/lib/puzzleGenerator";
 import { PuzzlePieceData } from "@/types/puzzle";
 import { ChatMessage, Player } from "@/types/room";
 
+/* Brand tokens used across canvas drawing (kept as consts so the palette
+   only has to change in one place if it ever does) */
+const C = {
+  bg: "#0F1C2E",
+  panel: "#16263D",
+  coral: "#FF6B4A",
+  gold: "#F4B942",
+  paper: "#F5EFE0",
+  muted: "#A8ADC4",
+  mint: "#34D399",
+};
+
 /* ──────────────────────────────────────────────────────────
  * LOBBY VIEW
  * ────────────────────────────────────────────────────────── */
@@ -22,7 +34,7 @@ function LobbyView({ roomCode }: { roomCode: string }) {
   function copyCode() {
     navigator.clipboard.writeText(roomCode);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 1800);
   }
 
   function handleLeave() {
@@ -41,41 +53,37 @@ function LobbyView({ roomCode }: { roomCode: string }) {
 
   const players = Object.values(room.players);
   const isHost = player?.isHost;
+  const emptySlots = Math.max(0, room.maxPlayers - players.length);
 
   return (
-    <div className="flex-1 flex items-center justify-center px-6 py-10">
-      <div className="w-full max-w-2xl space-y-6">
-        {/* Room Code Banner */}
-        <div className="glass-panel rounded-2xl p-6 text-center space-y-3">
-          <p className="text-sm text-slate-400">Room Code</p>
-          <button
-            onClick={copyCode}
-            className="inline-flex items-center gap-3 px-6 py-3 rounded-xl bg-slate-800/80 border border-white/10 hover:border-indigo-500/40 transition-all group"
-          >
-            <span className="font-mono text-2xl font-bold tracking-widest text-gradient">
+    <div className="flex flex-1 items-center justify-center px-6 py-10 sm:py-14">
+      <div className="w-full max-w-2xl space-y-5">
+        {/* Room Code */}
+        <div className="fade-up text-center" style={{ animationDelay: "0ms" }}>
+          <p className="section-label !mb-3 justify-center">Room code</p>
+          <button onClick={copyCode} className="code-chip group">
+            <span className="jb-mono text-2xl font-bold tracking-[0.2em] text-[#F5EFE0] sm:text-3xl">
               {roomCode}
             </span>
-            <span className="text-slate-500 group-hover:text-indigo-400 transition-colors text-sm">
-              {copied ? "✓ Copied!" : "📋 Copy"}
+            <span className={`copy-flag ${copied ? "copy-flag-active" : ""}`}>
+              {copied ? "Copied" : "Copy"}
             </span>
           </button>
-          <p className="text-xs text-slate-500">
-            Share this code with friends to join
-          </p>
+          <p className="mt-2.5 text-xs text-[#6C7A94]">Share this code with friends to join</p>
         </div>
 
-        {/* Settings Preview */}
+        {/* Puzzle preview */}
         {room.config && (
-          <div className="glass-panel rounded-2xl p-5 flex items-center gap-4">
+          <div className="fade-up flex items-center gap-4" style={{ animationDelay: "70ms" }}>
             <img
               src={room.config.imageUrl}
               alt={room.config.imageTitle}
-              className="w-20 h-14 rounded-lg object-cover border border-white/10"
+              className="h-16 w-24 flex-shrink-0 rounded-xl border border-white/10 object-cover"
             />
-            <div className="flex-1 space-y-1">
-              <p className="text-sm font-medium text-white">{room.config.imageTitle}</p>
-              <p className="text-xs text-slate-400">
-                {room.config.totalPieces} pieces ({room.config.rows}×{room.config.cols}) • Up to{" "}
+            <div>
+              <p className="text-sm font-medium text-[#F5EFE0]">{room.config.imageTitle}</p>
+              <p className="jb-mono mt-0.5 text-[11px] uppercase tracking-wide text-[#8A96AE]">
+                {room.config.totalPieces} pcs · {room.config.rows}×{room.config.cols} · up to{" "}
                 {room.maxPlayers} players
               </p>
             </div>
@@ -83,120 +91,105 @@ function LobbyView({ roomCode }: { roomCode: string }) {
         )}
 
         {/* Players */}
-        <div className="glass-panel rounded-2xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-300">
+        <div className="fade-up" style={{ animationDelay: "140ms" }}>
+          <div className="mb-3 flex items-center justify-between">
+            <label className="section-label !mb-0">
               Players ({players.length}/{room.maxPlayers})
-            </h2>
+            </label>
             <div className="flex items-center gap-1.5">
               <span
-                className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-400" : "bg-red-400"}`}
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ background: isConnected ? C.mint : C.coral }}
               />
-              <span className="text-xs text-slate-500">
-                {isConnected ? "Live" : "Reconnecting..."}
+              <span className="jb-mono text-[10px] uppercase tracking-wider text-[#6C7A94]">
+                {isConnected ? "Live" : "Reconnecting…"}
               </span>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {players.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-800/50 border border-white/5"
-              >
+              <div key={p.id} className="player-slot">
                 <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-base"
                   style={{ backgroundColor: p.color + "30", border: `2px solid ${p.color}` }}
                 >
                   {p.avatar}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{p.name}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-[#F5EFE0]">{p.name}</p>
                   {p.isHost && (
-                    <span className="text-[10px] text-indigo-400 uppercase tracking-wider">
+                    <span className="jb-mono text-[9.5px] uppercase tracking-wider text-[#F4B942]">
                       Host
                     </span>
                   )}
                 </div>
               </div>
             ))}
-            {/* Empty slots */}
-            {Array.from({ length: room.maxPlayers - players.length }).map((_, i) => (
-              <div
-                key={`empty-${i}`}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-white/5 opacity-30"
-              >
-                <div className="w-8 h-8 rounded-full bg-slate-700/50 flex items-center justify-center text-sm">
+            {Array.from({ length: emptySlots }).map((_, i) => (
+              <div key={`empty-${i}`} className="empty-slot">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-white/10 text-sm text-[#5C6A85]">
                   ?
                 </div>
-                <span className="text-xs text-slate-500">Waiting...</span>
+                <span className="jb-mono text-[11px] text-[#5C6A85]">Waiting…</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Chat */}
-        <div className="glass-panel rounded-2xl p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-slate-300">Chat</h2>
-          <div className="h-32 overflow-y-auto space-y-1.5 pr-1">
+        <div className="fade-up" style={{ animationDelay: "210ms" }}>
+          <label className="section-label">Chat</label>
+          <div className="chat-scroll h-28 space-y-1.5 overflow-y-auto pr-1">
             {room.chat.length === 0 ? (
-              <p className="text-xs text-slate-600 text-center py-4">
-                No messages yet. Say hello! 👋
-              </p>
+              <p className="py-4 text-center text-xs text-[#5C6A85]">No messages yet — say hello 👋</p>
             ) : (
               room.chat.map((msg) => (
                 <div key={msg.id} className="text-xs">
                   {msg.system ? (
-                    <span className="text-slate-500 italic">{msg.text}</span>
+                    <span className="italic text-[#5C6A85]">{msg.text}</span>
                   ) : (
                     <>
                       <span className="font-medium" style={{ color: msg.senderColor }}>
                         {msg.senderName}:
                       </span>{" "}
-                      <span className="text-slate-300">{msg.text}</span>
+                      <span className="text-[#C3C9D9]">{msg.text}</span>
                     </>
                   )}
                 </div>
               ))
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="mt-2 flex items-center gap-3">
             <input
               type="text"
-              placeholder="Type a message..."
+              placeholder="Type a message…"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
-              className="flex-1 bg-slate-800/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition-all"
+              className="field-minimal !text-sm"
             />
-            <button
-              onClick={handleSendChat}
-              className="px-4 py-2 rounded-xl bg-indigo-600/30 border border-indigo-500/30 text-sm text-indigo-300 hover:bg-indigo-600/50 transition-all"
-            >
+            <button onClick={handleSendChat} className="jb-mono text-xs uppercase tracking-wider text-[#FF6B4A] hover:text-[#FF8768]">
               Send
             </button>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-3">
-          <button
-            onClick={handleLeave}
-            className="flex-1 py-3 rounded-2xl font-medium text-slate-400 glass-card hover:text-white transition-all"
-          >
-            Leave Room
+        {/* Actions */}
+        <div className="fade-up flex gap-3 pt-1" style={{ animationDelay: "280ms" }}>
+          <button onClick={handleLeave} className="btn-piece btn-piece-ghost flex-1 justify-center">
+            Leave room
           </button>
-          {isHost && (
+          {isHost ? (
             <button
               onClick={() => startGame()}
               disabled={players.length < 1}
-              className="flex-1 py-3 rounded-2xl font-semibold text-white bg-gradient-glow shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all duration-300 hover:scale-[1.02] disabled:opacity-50"
+              className="btn-piece btn-piece-primary flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-50"
             >
-              🎮 Start Game
+              Start game
             </button>
-          )}
-          {!isHost && (
-            <div className="flex-1 py-3 rounded-2xl text-center text-sm text-slate-400 glass-card">
-              Waiting for host to start...
+          ) : (
+            <div className="flex flex-1 items-center justify-center rounded-[14px] border border-white/10 text-center text-sm text-[#8A96AE]">
+              Waiting for host…
             </div>
           )}
         </div>
@@ -224,11 +217,18 @@ function GameView({ roomCode }: { roomCode: string }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [showRef, setShowRef] = useState(false);
+  const [ghostVisible, setGhostVisible] = useState(true);
 
   const scaleRef = useRef(1);
   const offsetRef = useRef({ x: 0, y: 0 });
   const isPanning = useRef(false);
   const lastPanPos = useRef({ x: 0, y: 0 });
+  const pinchRef = useRef<{
+    dist: number;
+    scale: number;
+    mid: { x: number; y: number };
+    offset: { x: number; y: number };
+  } | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   const playSnapSound = useCallback(() => {
@@ -249,7 +249,7 @@ function GameView({ roomCode }: { roomCode: string }) {
   const playCompletionSound = useCallback(() => {
     if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
     const ctx = audioCtxRef.current;
-    [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -267,38 +267,22 @@ function GameView({ roomCode }: { roomCode: string }) {
     const onSnap = () => playSnapSound();
     const onComplete = () => {
       playCompletionSound();
-      // Fire confetti burst
-      confetti({
-        particleCount: 150,
-        spread: 70,
-        origin: { y: 0.6 },
-      });
+      const brandColors = ["#FF6B4A", "#F4B942", "#F5EFE0", "#34D399"];
+      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: brandColors });
       const duration = 2000;
       const end = Date.now() + duration;
       const frame = () => {
-        confetti({
-          particleCount: 4,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0, y: 0.6 },
-        });
-        confetti({
-          particleCount: 4,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1, y: 0.6 },
-        });
-        if (Date.now() < end) {
-          requestAnimationFrame(frame);
-        }
+        confetti({ particleCount: 4, angle: 60, spread: 55, origin: { x: 0, y: 0.6 }, colors: brandColors });
+        confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1, y: 0.6 }, colors: brandColors });
+        if (Date.now() < end) requestAnimationFrame(frame);
       };
       frame();
     };
-    socket.on('pieces_snapped', onSnap);
-    socket.on('game_completed', onComplete);
+    socket.on("pieces_snapped", onSnap);
+    socket.on("game_completed", onComplete);
     return () => {
-      socket.off('pieces_snapped', onSnap);
-      socket.off('game_completed', onComplete);
+      socket.off("pieces_snapped", onSnap);
+      socket.off("game_completed", onComplete);
     };
   }, [socket, playSnapSound, playCompletionSound]);
 
@@ -310,6 +294,20 @@ function GameView({ roomCode }: { roomCode: string }) {
   const isDragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
   const animFrameRef = useRef<number | undefined>(undefined);
+  // Mirrors the exact draw order each frame — hit-testing reads this instead of the
+  // raw `pieces` array, so clicking/tapping always grabs whatever is visually on top.
+  const stackOrderRef = useRef<PuzzlePieceData[]>([]);
+
+  // Track when each piece last transitioned into place, for the snap-pop animation
+  const placedAtRef = useRef<Record<string, number>>({});
+  const prevPlacedRef = useRef<Record<string, boolean>>({});
+  useEffect(() => {
+    pieces.forEach((p) => {
+      const wasPlaced = prevPlacedRef.current[p.id];
+      if (p.isPlaced && !wasPlaced) placedAtRef.current[p.id] = Date.now();
+      prevPlacedRef.current[p.id] = p.isPlaced;
+    });
+  }, [pieces]);
 
   // Load puzzle image
   useEffect(() => {
@@ -360,16 +358,24 @@ function GameView({ roomCode }: { roomCode: string }) {
     // Draw board outline (target area)
     const boardX = 300;
     const boardY = 150;
-    ctx.strokeStyle = "rgba(99, 102, 241, 0.15)";
+    ctx.strokeStyle = "rgba(244,185,66,0.22)";
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 6]);
     ctx.strokeRect(boardX, boardY, config.boardWidth, config.boardHeight);
     ctx.setLineDash([]);
 
+    // Faint guide of the finished image, so the target is always visible
+    if (ghostVisible) {
+      ctx.save();
+      ctx.globalAlpha = 0.14;
+      ctx.drawImage(img, boardX, boardY, config.boardWidth, config.boardHeight);
+      ctx.restore();
+    }
+
     // Draw grid lines on board
     const pw = config.boardWidth / config.cols;
     const ph = config.boardHeight / config.rows;
-    ctx.strokeStyle = "rgba(99, 102, 241, 0.06)";
+    ctx.strokeStyle = "rgba(244,185,66,0.07)";
     ctx.lineWidth = 1;
     for (let r = 1; r < config.rows; r++) {
       ctx.beginPath();
@@ -387,64 +393,80 @@ function GameView({ roomCode }: { roomCode: string }) {
     // Draw pieces (unplaced first, placed on top)
     const sortedPieces = [...pieces].sort((a, b) => {
       if (a.isPlaced !== b.isPlaced) return a.isPlaced ? -1 : 1;
-      if (a.id === activePieceId) return 1; // Active piece on top
+      if (a.id === activePieceId) return 1;
       return 0;
     });
 
+    stackOrderRef.current = sortedPieces;
+
+    const applyPop = (popScale: number) => {
+      if (popScale === 1) return;
+      ctx.translate(pw / 2, ph / 2);
+      ctx.scale(popScale, popScale);
+      ctx.translate(-pw / 2, -ph / 2);
+    };
+
     for (const piece of sortedPieces) {
+      const placedAt = placedAtRef.current[piece.id];
+      const popT = placedAt ? Math.min(1, (Date.now() - placedAt) / 260) : 1;
+      const ease = 1 - Math.pow(1 - popT, 2);
+      const placePop = placedAt && popT < 1 ? 1 + 0.16 * (1 - ease) : 1;
+      // Lift the piece currently being dragged slightly, for tactile feedback
+      const dragLift = piece.id === activePieceId ? 1.06 : 1;
+      const popScale = placePop * dragLift;
+
       ctx.save();
       ctx.translate(piece.currentX, piece.currentY);
+      applyPop(popScale);
 
       const tabOverflow = Math.max(pw, ph) * 0.26;
 
-      // Create clipping path (tabs extend beyond 0,0 → pw,ph)
       drawPiecePath(ctx, piece, pw, ph);
       ctx.clip();
 
-      // Draw image slice with tab overflow
       const srcPw = img.naturalWidth / config.cols;
       const srcPh = img.naturalHeight / config.rows;
       const srcOverflowX = tabOverflow * (img.naturalWidth / config.boardWidth);
       const srcOverflowY = tabOverflow * (img.naturalHeight / config.boardHeight);
-      const sx = (piece.gridX * srcPw) - srcOverflowX;
-      const sy = (piece.gridY * srcPh) - srcOverflowY;
+      const sx = piece.gridX * srcPw - srcOverflowX;
+      const sy = piece.gridY * srcPh - srcOverflowY;
       const sw = srcPw + srcOverflowX * 2;
       const sh = srcPh + srcOverflowY * 2;
       ctx.drawImage(img, sx, sy, sw, sh, -tabOverflow, -tabOverflow, pw + tabOverflow * 2, ph + tabOverflow * 2);
 
       ctx.restore();
 
-      // Draw shadow for unplaced pieces before border
       if (!piece.isPlaced) {
         ctx.save();
         ctx.translate(piece.currentX, piece.currentY);
+        applyPop(popScale);
         drawPiecePath(ctx, piece, pw, ph);
-        ctx.shadowColor = piece.id === activePieceId ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)';
-        ctx.shadowBlur = piece.id === activePieceId ? 12 : 6;
+        ctx.shadowColor = piece.id === activePieceId ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.3)";
+        ctx.shadowBlur = piece.id === activePieceId ? 14 : 6;
         ctx.shadowOffsetX = piece.id === activePieceId ? 4 : 2;
         ctx.shadowOffsetY = piece.id === activePieceId ? 4 : 2;
-        ctx.fillStyle = 'rgba(0,0,0,0.01)';
+        ctx.fillStyle = "rgba(0,0,0,0.01)";
         ctx.fill();
         ctx.restore();
       }
 
-      // Draw piece border
       ctx.save();
       ctx.translate(piece.currentX, piece.currentY);
+      applyPop(popScale);
       drawPiecePath(ctx, piece, pw, ph);
       if (piece.lockedBy && piece.lockedBy !== socket.id) {
-        ctx.strokeStyle = piece.lockedByColor || "#f59e0b";
+        ctx.strokeStyle = piece.lockedByColor || C.gold;
         ctx.lineWidth = 2.5;
       } else if (piece.id === activePieceId) {
-        ctx.strokeStyle = "#818cf8";
+        ctx.strokeStyle = C.coral;
         ctx.lineWidth = 2.5;
-        ctx.shadowColor = "rgba(129, 140, 248, 0.4)";
-        ctx.shadowBlur = 10;
+        ctx.shadowColor = "rgba(255,107,74,0.45)";
+        ctx.shadowBlur = 12;
       } else if (piece.isPlaced) {
-        ctx.strokeStyle = "rgba(52, 211, 153, 0.4)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = popT < 1 ? C.gold : "rgba(52, 211, 153, 0.45)";
+        ctx.lineWidth = popT < 1 ? 2 : 1;
       } else {
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+        ctx.strokeStyle = "rgba(245, 239, 224, 0.16)";
         ctx.lineWidth = 1;
       }
       ctx.stroke();
@@ -461,7 +483,6 @@ function GameView({ roomCode }: { roomCode: string }) {
         ctx.save();
         ctx.translate(pos.x, pos.y);
 
-        // Cursor triangle
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.lineTo(0, 16);
@@ -473,8 +494,7 @@ function GameView({ roomCode }: { roomCode: string }) {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Name label
-        ctx.font = "11px system-ui";
+        ctx.font = "11px 'Inter', system-ui";
         const nameWidth = ctx.measureText(p.name).width;
         ctx.fillStyle = p.color + "cc";
         ctx.beginPath();
@@ -486,7 +506,7 @@ function GameView({ roomCode }: { roomCode: string }) {
         ctx.restore();
       }
     }
-  }, [pieces, activePieceId, room, cursors, socket]);
+  }, [pieces, activePieceId, room, cursors, socket, ghostVisible]);
 
   // Animation loop
   useEffect(() => {
@@ -517,16 +537,20 @@ function GameView({ roomCode }: { roomCode: string }) {
     if (!room?.config) return null;
     const pw = room.config.boardWidth / room.config.cols;
     const ph = room.config.boardHeight / room.config.rows;
+    // A little forgiveness around each piece's box — makes small pieces (and finger taps) easier to grab.
+    const pad = Math.min(pw, ph) * 0.12;
 
-    // Search in reverse order (top-most first)
-    for (let i = pieces.length - 1; i >= 0; i--) {
-      const piece = pieces[i];
+    // Search the *actual on-screen draw order*, topmost first — not the raw pieces array,
+    // whose order has no relationship to what's visually stacked on top.
+    const order = stackOrderRef.current.length ? stackOrderRef.current : pieces;
+    for (let i = order.length - 1; i >= 0; i--) {
+      const piece = order[i];
       if (piece.isPlaced) continue;
       if (
-        x >= piece.currentX &&
-        x <= piece.currentX + pw &&
-        y >= piece.currentY &&
-        y <= piece.currentY + ph
+        x >= piece.currentX - pad &&
+        x <= piece.currentX + pw + pad &&
+        y >= piece.currentY - pad &&
+        y <= piece.currentY + ph + pad
       ) {
         return piece;
       }
@@ -560,10 +584,7 @@ function GameView({ roomCode }: { roomCode: string }) {
     if (piece.lockedBy && piece.lockedBy !== socket.id) return;
 
     isDragging.current = true;
-    dragOffset.current = {
-      x: pos.x - piece.currentX,
-      y: pos.y - piece.currentY,
-    };
+    dragOffset.current = { x: pos.x - piece.currentX, y: pos.y - piece.currentY };
     handleDragStart(piece.id);
   }
 
@@ -577,7 +598,6 @@ function GameView({ roomCode }: { roomCode: string }) {
 
     const pos = getCanvasPos(e);
 
-    // Broadcast cursor to others
     if (room) {
       socket.emit("cursor_move", { roomCode: room.code, x: pos.x, y: pos.y });
     }
@@ -589,16 +609,102 @@ function GameView({ roomCode }: { roomCode: string }) {
     handleDragMove(activePieceId, newX, newY);
   }
 
-  function onPointerUp(e?: React.MouseEvent) {
+  function onPointerUp() {
     if (isPanning.current) {
       isPanning.current = false;
       return;
     }
-
     if (isDragging.current && activePieceId !== null) {
       handleDragEnd(activePieceId);
     }
     isDragging.current = false;
+  }
+
+  // Touch handlers — single finger drags a piece or pans, two fingers pinch-zoom + pan
+  function touchDist(t1: React.Touch, t2: React.Touch) {
+    return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+  }
+  function touchMid(t1: React.Touch, t2: React.Touch, rect: DOMRect) {
+    return { x: (t1.clientX + t2.clientX) / 2 - rect.left, y: (t1.clientY + t2.clientY) / 2 - rect.top };
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
+    if (e.touches.length === 2) {
+      isDragging.current = false;
+      isPanning.current = false;
+      const d = touchDist(e.touches[0], e.touches[1]);
+      const mid = touchMid(e.touches[0], e.touches[1], rect);
+      pinchRef.current = { dist: d, scale: scaleRef.current, mid, offset: { ...offsetRef.current } };
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      const x = t.clientX - rect.left;
+      const y = t.clientY - rect.top;
+      const wx = (x - offsetRef.current.x) / scaleRef.current;
+      const wy = (y - offsetRef.current.y) / scaleRef.current;
+      const piece = findPieceAt(wx, wy);
+      if (piece && !(piece.lockedBy && piece.lockedBy !== socket.id)) {
+        isDragging.current = true;
+        dragOffset.current = { x: wx - piece.currentX, y: wy - piece.currentY };
+        handleDragStart(piece.id);
+      } else {
+        isPanning.current = true;
+        lastPanPos.current = { x: t.clientX, y: t.clientY };
+      }
+    }
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
+    if (e.touches.length === 2 && pinchRef.current) {
+      const d = touchDist(e.touches[0], e.touches[1]);
+      const mid = touchMid(e.touches[0], e.touches[1], rect);
+      const p = pinchRef.current;
+      const newScale = Math.min(3, Math.max(0.3, p.scale * (d / p.dist)));
+      const wx = (p.mid.x - p.offset.x) / p.scale;
+      const wy = (p.mid.y - p.offset.y) / p.scale;
+      scaleRef.current = newScale;
+      offsetRef.current.x = mid.x - wx * newScale;
+      offsetRef.current.y = mid.y - wy * newScale;
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      if (isPanning.current) {
+        offsetRef.current.x += t.clientX - lastPanPos.current.x;
+        offsetRef.current.y += t.clientY - lastPanPos.current.y;
+        lastPanPos.current = { x: t.clientX, y: t.clientY };
+        return;
+      }
+      if (isDragging.current && activePieceId !== null) {
+        const x = t.clientX - rect.left;
+        const y = t.clientY - rect.top;
+        const wx = (x - offsetRef.current.x) / scaleRef.current;
+        const wy = (y - offsetRef.current.y) / scaleRef.current;
+        handleDragMove(activePieceId, wx - dragOffset.current.x, wy - dragOffset.current.y);
+      }
+    }
+  }
+
+  function onTouchEnd(e: React.TouchEvent) {
+    if (e.touches.length < 2) pinchRef.current = null;
+    if (e.touches.length === 0) {
+      if (isDragging.current && activePieceId !== null) {
+        handleDragEnd(activePieceId);
+      }
+      isDragging.current = false;
+      isPanning.current = false;
+    }
   }
 
   // Timer
@@ -617,109 +723,121 @@ function GameView({ roomCode }: { roomCode: string }) {
     return `${m}:${s.toString().padStart(2, "0")}`;
   }
 
+  const playerList = room ? Object.values(room.players) : [];
+
   return (
-    <div className="flex-1 flex flex-col h-screen">
+    <div className="pt-app relative flex h-dvh flex-col bg-[#0F1C2E] text-[#F5EFE0]">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 glass-panel border-b border-white/5">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="flex items-center gap-1.5">
-            <span className="text-xl">🧩</span>
-            <span className="text-sm font-bold text-gradient hidden sm:inline">
-              Piece Together
-            </span>
+      <div className="relative z-10 flex items-center justify-between border-b border-white/[0.06] bg-[#12213A] px-3 py-2.5 sm:px-5">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <Link href="/" className="group flex items-center gap-1.5">
+            <span className="text-lg transition-transform group-hover:scale-110">🧩</span>
+            <span className="font-display hidden text-sm font-semibold sm:inline">Piece Together</span>
           </Link>
-          <span className="text-xs font-mono text-slate-500 bg-slate-800/60 px-2 py-1 rounded">
+          <span className="jb-mono rounded-md bg-white/[0.06] px-2 py-1 text-[11px] tracking-wider text-[#8A96AE]">
             {roomCode}
           </span>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* Progress */}
+        <div className="flex items-center gap-3 sm:gap-5">
           <div className="flex items-center gap-2">
-            <div className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-1.5 w-14 overflow-hidden rounded-full bg-white/[0.08] sm:w-24">
               <div
-                className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${progressPercent}%`, background: "linear-gradient(90deg, #FF6B4A, #F4B942)" }}
               />
             </div>
-            <span className="text-xs font-mono text-slate-400">{progressPercent}%</span>
+            <span className="jb-mono text-[11px] text-[#8A96AE]">{progressPercent}%</span>
           </div>
 
-          {/* Timer */}
-          <span className="text-sm font-mono text-slate-300">⏱ {formatTime(elapsed)}</span>
+          <span className="jb-mono text-sm text-[#C3C9D9]">{formatTime(elapsed)}</span>
 
-          {/* Player avatars */}
-          <div className="flex -space-x-2">
-            {room &&
-              Object.values(room.players).map((p) => (
-                <div
-                  key={p.id}
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs border-2 border-slate-900"
-                  style={{ backgroundColor: p.color + "40" }}
-                  title={p.name}
-                >
-                  {p.avatar}
-                </div>
-              ))}
+          <div className="hidden -space-x-2 sm:flex">
+            {playerList.map((p) => (
+              <div
+                key={p.id}
+                className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#12213A] text-xs"
+                style={{ backgroundColor: p.color + "40" }}
+                title={p.name}
+              >
+                {p.avatar}
+              </div>
+            ))}
           </div>
+          <span className="jb-mono text-[11px] text-[#8A96AE] sm:hidden">{playerList.length}p</span>
         </div>
       </div>
 
       {/* Canvas area */}
-      <div
-        ref={containerRef}
-        className="flex-1 relative overflow-hidden grid-bg cursor-crosshair"
-      >
+      <div ref={containerRef} className="relative flex-1 overflow-hidden bg-[#0F1C2E]">
         <canvas
           ref={canvasRef}
-          className="w-full h-full"
+          className="h-full w-full touch-none cursor-crosshair"
           onMouseDown={onPointerDown}
           onMouseMove={onPointerMove}
           onMouseUp={onPointerUp}
           onMouseLeave={onPointerUp}
           onWheel={onWheel}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onTouchCancel={onTouchEnd}
           onContextMenu={(e) => e.preventDefault()}
         />
       </div>
 
-      {/* Reference Image */}
-      <div className="absolute left-3 bottom-3 group z-10">
-        <button onClick={() => setShowRef(!showRef)} className="glass-panel rounded-xl p-2 text-xs text-slate-400 hover:text-white transition-all">
+      {/* Reference Image + guide toggle */}
+      <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2">
+        <button onClick={() => setShowRef(!showRef)} className="ref-pill">
           🖼️ Reference
         </button>
+        <button
+          onClick={() => setGhostVisible((v) => !v)}
+          className="ref-pill"
+          data-active={ghostVisible}
+          title="Toggle faint image guide on the board"
+        >
+          {ghostVisible ? "👁️ Guide on" : "👁️ Guide off"}
+        </button>
         {showRef && (
-          <div className="absolute bottom-10 left-0 glass-panel rounded-xl p-2 shadow-2xl">
-            <img src={room?.config?.imageUrl} className="w-48 rounded-lg border border-white/10" />
+          <div className="absolute bottom-11 left-0 rounded-xl border border-white/10 bg-[#16263D] p-2 shadow-2xl">
+            <img src={room?.config?.imageUrl} className="w-40 rounded-lg sm:w-48" />
           </div>
         )}
       </div>
 
-      {/* Chat Sidebar */}
-      <div className={`absolute right-0 top-0 bottom-0 w-72 glass-panel border-l border-white/10 flex flex-col transition-transform duration-300 z-20 ${chatOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <div className="p-3 border-b border-white/10 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-200">Chat</h3>
-          <button onClick={() => setChatOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+      {/* Chat — desktop sidebar */}
+      <div
+        className={`absolute bottom-0 right-0 top-0 z-20 hidden w-72 flex-col border-l border-white/10 bg-[#12213A] transition-transform duration-300 sm:flex ${
+          chatOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 p-3">
+          <h3 className="text-sm font-semibold text-[#F5EFE0]">Chat</h3>
+          <button onClick={() => setChatOpen(false)} className="text-[#8A96AE] hover:text-white">
+            ✕
+          </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        <div className="flex-1 space-y-2 overflow-y-auto p-3">
           {room?.chat.map((msg) => (
             <div key={msg.id} className="text-xs">
               {msg.system ? (
-                <span className="text-slate-500 italic">{msg.text}</span>
+                <span className="italic text-[#5C6A85]">{msg.text}</span>
               ) : (
                 <>
                   <span className="font-medium" style={{ color: msg.senderColor }}>
                     {msg.senderName}:
                   </span>{" "}
-                  <span className="text-slate-300">{msg.text}</span>
+                  <span className="text-[#C3C9D9]">{msg.text}</span>
                 </>
               )}
             </div>
           ))}
         </div>
-        <div className="p-3 border-t border-white/10 flex gap-2">
+        <div className="border-t border-white/10 p-3">
           <input
             type="text"
-            placeholder="Type..."
+            placeholder="Type…"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => {
@@ -728,37 +846,77 @@ function GameView({ roomCode }: { roomCode: string }) {
                 setChatInput("");
               }
             }}
-            className="flex-1 bg-slate-800/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50"
+            className="field-minimal !text-xs"
           />
         </div>
       </div>
-      <button onClick={() => setChatOpen(!chatOpen)} className="absolute right-3 bottom-3 glass-panel p-3 rounded-full text-lg hover:scale-110 transition-transform z-10 shadow-lg">
+
+      {/* Chat — mobile bottom sheet */}
+      <div
+        className={`fixed inset-x-0 bottom-0 z-30 flex max-h-[65vh] flex-col rounded-t-3xl border-t border-white/10 bg-[#12213A] transition-transform duration-300 sm:hidden ${
+          chatOpen ? "translate-y-0" : "translate-y-full"
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 p-4">
+          <h3 className="font-display text-base font-semibold text-[#F5EFE0]">Chat</h3>
+          <button onClick={() => setChatOpen(false)} className="text-[#8A96AE] hover:text-white">
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 space-y-2 overflow-y-auto p-4" style={{ minHeight: "30vh" }}>
+          {room?.chat.map((msg) => (
+            <div key={msg.id} className="text-sm">
+              {msg.system ? (
+                <span className="italic text-[#5C6A85]">{msg.text}</span>
+              ) : (
+                <>
+                  <span className="font-medium" style={{ color: msg.senderColor }}>
+                    {msg.senderName}:
+                  </span>{" "}
+                  <span className="text-[#C3C9D9]">{msg.text}</span>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-white/10 p-4 pb-6">
+          <input
+            type="text"
+            placeholder="Type a message…"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && chatInput.trim()) {
+                sendChatMessage(chatInput.trim());
+                setChatInput("");
+              }
+            }}
+            className="field-minimal"
+          />
+        </div>
+      </div>
+
+      <button onClick={() => setChatOpen(!chatOpen)} className="chat-fab">
         💬
       </button>
 
       {/* Victory Modal */}
       {isCompleted && completionData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="glass-panel rounded-3xl p-10 text-center space-y-6 max-w-md animate-[scaleIn_0.3s_ease-out]">
-            <div className="text-6xl">🎉</div>
-            <h2 className="text-3xl font-bold text-gradient">Puzzle Complete!</h2>
-            <p className="text-slate-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm">
+          <div className="modal-pop w-full max-w-md rounded-3xl border border-white/10 bg-[#16263D] p-8 text-center sm:p-10">
+            <div className="text-5xl">🎉</div>
+            <h2 className="font-display mt-4 text-3xl font-semibold">
+              Puzzle <span className="italic text-[#FF6B4A]">complete!</span>
+            </h2>
+            <p className="mt-2 text-[#A8ADC4]">
               Solved in{" "}
-              <span className="font-mono font-bold text-indigo-400">
-                {formatTime(completionData.durationSeconds)}
-              </span>
+              <span className="jb-mono font-bold text-[#F4B942]">{formatTime(completionData.durationSeconds)}</span>
             </p>
-            <div className="flex gap-3">
-              <Link
-                href="/create"
-                className="flex-1 py-3 rounded-xl font-semibold text-white bg-gradient-glow hover:scale-[1.03] transition-all"
-              >
-                New Puzzle
+            <div className="mt-7 flex gap-3">
+              <Link href="/create" className="btn-piece btn-piece-primary flex-1 justify-center">
+                New puzzle
               </Link>
-              <Link
-                href="/"
-                className="flex-1 py-3 rounded-xl font-medium text-slate-300 glass-card hover:text-white transition-all"
-              >
+              <Link href="/" className="btn-piece btn-piece-ghost flex-1 justify-center">
                 Home
               </Link>
             </div>
@@ -778,7 +936,6 @@ function RoomContent({ roomCode }: { roomCode: string }) {
   const [joining, setJoining] = useState(false);
   const hasJoined = useRef(false);
 
-  // Auto-join if we navigated here directly or refreshed
   useEffect(() => {
     if (!isConnected || hasJoined.current) return;
 
@@ -790,19 +947,18 @@ function RoomContent({ roomCode }: { roomCode: string }) {
     if (!room && !joining) {
       setJoining(true);
       hasJoined.current = true;
-      joinRoom(roomCode, `Player-${Math.floor(Math.random() * 1000)}`, "🧩")
-        .catch(() => {
-          router.push(`/join?code=${roomCode}`);
-        });
+      joinRoom(roomCode, `Player-${Math.floor(Math.random() * 1000)}`, "🧩").catch(() => {
+        router.push(`/join?code=${roomCode}`);
+      });
     }
   }, [isConnected, room, roomCode, router, joinRoom, joining]);
 
   if (!room || room.code !== roomCode) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="text-4xl animate-pulse">🧩</div>
-          <p className="text-slate-400">Connecting to room...</p>
+      <div className="flex flex-1 items-center justify-center">
+        <div className="space-y-4 text-center">
+          <div className="pulse-piece text-4xl">🧩</div>
+          <p className="text-[#8A96AE]">Connecting to room…</p>
         </div>
       </div>
     );
@@ -824,15 +980,184 @@ export default function RoomPage({ params }: { params: Promise<{ roomCode: strin
 
   if (!roomCode) {
     return (
-      <main className="flex-1 flex items-center justify-center">
-        <div className="text-4xl animate-pulse">🧩</div>
+      <main className="pt-app flex min-h-screen items-center justify-center bg-[#0F1C2E]">
+        <div className="pulse-piece text-4xl">🧩</div>
       </main>
     );
   }
 
   return (
-    <main className="flex flex-col min-h-screen">
+    <main className="pt-app flex min-h-screen flex-col bg-[#0F1C2E] text-[#F5EFE0]">
       <RoomContent roomCode={roomCode} />
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        .pt-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+        .font-display { font-family: 'Fraunces', serif; font-optical-sizing: auto; }
+        .jb-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+        .section-label {
+          display: flex;
+          align-items: center;
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.14em;
+          color: #8A96AE;
+          margin-bottom: 0.6rem;
+        }
+
+        .field-minimal {
+          width: 100%;
+          background: transparent;
+          border: none;
+          border-bottom: 1.5px solid rgba(245,239,224,0.16);
+          padding: 0.5rem 0.1rem 0.6rem;
+          font-size: 1rem;
+          color: #F5EFE0;
+          transition: border-color 0.2s ease;
+        }
+        .field-minimal::placeholder { color: #5C6A85; }
+        .field-minimal:focus { outline: none; border-color: #FF6B4A; }
+
+        .btn-piece {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.85rem 1.6rem 0.85rem 2rem;
+          border-radius: 14px;
+          font-weight: 600;
+          font-size: 0.9rem;
+          transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+          white-space: nowrap;
+        }
+        .btn-piece::before {
+          content: "";
+          position: absolute;
+          left: -7px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 15px;
+          height: 15px;
+          border-radius: 50%;
+        }
+        .btn-piece-primary { background: #FF6B4A; color: #0F1C2E; }
+        .btn-piece-primary::before { background: #FF6B4A; }
+        .btn-piece-primary:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 28px -10px rgba(255,107,74,0.65);
+        }
+        .btn-piece-ghost {
+          background: transparent;
+          color: #F5EFE0;
+          border: 1.5px solid rgba(245,239,224,0.18);
+        }
+        .btn-piece-ghost::before {
+          background: #0F1C2E;
+          border: 1.5px solid rgba(245,239,224,0.18);
+        }
+        .btn-piece-ghost:hover:not(:disabled) { border-color: rgba(245,239,224,0.4); transform: translateY(-2px); }
+
+        .code-chip {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.9rem;
+          padding: 0.9rem 1.5rem;
+          border-radius: 16px;
+          border: 1px solid rgba(245,239,224,0.12);
+          background: #16263D;
+          transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+        .code-chip:hover { border-color: rgba(255,107,74,0.4); transform: translateY(-1px); }
+        .copy-flag {
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+          font-size: 10.5px;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          color: #6C7A94;
+          transition: color 0.2s ease;
+        }
+        .copy-flag-active { color: #34D399; }
+
+        .player-slot, .empty-slot {
+          display: flex;
+          align-items: center;
+          gap: 0.7rem;
+          padding: 0.6rem 0.8rem;
+          border-radius: 14px;
+          background: rgba(245,239,224,0.03);
+          border: 1px solid rgba(245,239,224,0.06);
+        }
+        .empty-slot {
+          background: transparent;
+          border-style: dashed;
+          border-color: rgba(244,185,66,0.18);
+          animation: dash-pulse 2s ease-in-out infinite;
+        }
+
+        .chat-scroll::-webkit-scrollbar { width: 4px; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: rgba(245,239,224,0.15); border-radius: 4px; }
+
+        .ref-pill {
+          border-radius: 999px;
+          padding: 0.5rem 0.9rem;
+          font-size: 12px;
+          background: rgba(22,38,61,0.9);
+          border: 1px solid rgba(245,239,224,0.12);
+          color: #C3C9D9;
+          backdrop-filter: blur(6px);
+          transition: border-color 0.2s ease;
+        }
+        .ref-pill:hover { border-color: rgba(255,107,74,0.4); color: #F5EFE0; }
+        .ref-pill[data-active="true"] { border-color: rgba(244,185,66,0.5); color: #F5EFE0; }
+
+        .chat-fab {
+          position: fixed;
+          right: 14px;
+          bottom: 14px;
+          z-index: 25;
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          font-size: 20px;
+          background: #FF6B4A;
+          box-shadow: 0 10px 24px -8px rgba(255,107,74,0.6);
+          transition: transform 0.2s ease;
+        }
+        .chat-fab:hover { transform: scale(1.08); }
+        .chat-fab:active { transform: scale(0.95); }
+
+        .fade-up { animation: fade-up 0.5s cubic-bezier(0.2,0.8,0.2,1) both; }
+        @keyframes fade-up {
+          from { opacity: 0; transform: translateY(14px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes dash-pulse {
+          0%, 100% { border-color: rgba(244,185,66,0.14); }
+          50% { border-color: rgba(244,185,66,0.4); }
+        }
+
+        .modal-pop { animation: modal-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
+        @keyframes modal-pop {
+          0% { opacity: 0; transform: scale(0.85) translateY(10px); }
+          60% { opacity: 1; transform: scale(1.03); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+
+        .pulse-piece { animation: pulse-piece 1.4s ease-in-out infinite; }
+        @keyframes pulse-piece {
+          0%, 100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.12); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .fade-up, .modal-pop, .pulse-piece, .empty-slot { animation: none !important; opacity: 1; transform: none; }
+        }
+      `}</style>
     </main>
   );
 }
