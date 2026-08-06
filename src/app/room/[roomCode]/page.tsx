@@ -262,9 +262,26 @@ function GameView({ roomCode }: { roomCode: string }) {
     });
   }, []);
 
+  const playRejectSound = useCallback(() => {
+    if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+    const ctx = audioCtxRef.current;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(220, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.16);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.16);
+  }, []);
+
   useEffect(() => {
     if (!socket) return;
     const onSnap = () => playSnapSound();
+    const onReject = () => playRejectSound();
     const onComplete = () => {
       playCompletionSound();
       const brandColors = ["#FF6B4A", "#F4B942", "#F5EFE0", "#34D399"];
@@ -279,12 +296,14 @@ function GameView({ roomCode }: { roomCode: string }) {
       frame();
     };
     socket.on("pieces_snapped", onSnap);
+    socket.on("snap_rejected", onReject);
     socket.on("game_completed", onComplete);
     return () => {
       socket.off("pieces_snapped", onSnap);
+      socket.off("snap_rejected", onReject);
       socket.off("game_completed", onComplete);
     };
-  }, [socket, playSnapSound, playCompletionSound]);
+  }, [socket, playSnapSound, playRejectSound, playCompletionSound]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -355,9 +374,18 @@ function GameView({ roomCode }: { roomCode: string }) {
     const offset = offsetRef.current;
     ctx.setTransform(scale * dpr, 0, 0, scale * dpr, offset.x * dpr, offset.y * dpr);
 
-    // Draw board outline (target area)
     const boardX = 300;
     const boardY = 150;
+
+    // Soft "mat" behind the board — gives the assembly zone a surface to sit on
+    ctx.save();
+    ctx.fillStyle = "rgba(245,239,224,0.028)";
+    ctx.beginPath();
+    ctx.roundRect(boardX - 14, boardY - 14, config.boardWidth + 28, config.boardHeight + 28, 18);
+    ctx.fill();
+    ctx.restore();
+
+    // Draw board outline (target area)
     ctx.strokeStyle = "rgba(244,185,66,0.22)";
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 6]);
@@ -436,20 +464,6 @@ function GameView({ roomCode }: { roomCode: string }) {
 
       ctx.restore();
 
-      if (!piece.isPlaced) {
-        ctx.save();
-        ctx.translate(piece.currentX, piece.currentY);
-        applyPop(popScale);
-        drawPiecePath(ctx, piece, pw, ph);
-        ctx.shadowColor = piece.id === activePieceId ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.3)";
-        ctx.shadowBlur = piece.id === activePieceId ? 14 : 6;
-        ctx.shadowOffsetX = piece.id === activePieceId ? 4 : 2;
-        ctx.shadowOffsetY = piece.id === activePieceId ? 4 : 2;
-        ctx.fillStyle = "rgba(0,0,0,0.01)";
-        ctx.fill();
-        ctx.restore();
-      }
-
       ctx.save();
       ctx.translate(piece.currentX, piece.currentY);
       applyPop(popScale);
@@ -460,14 +474,21 @@ function GameView({ roomCode }: { roomCode: string }) {
       } else if (piece.id === activePieceId) {
         ctx.strokeStyle = C.coral;
         ctx.lineWidth = 2.5;
-        ctx.shadowColor = "rgba(255,107,74,0.45)";
-        ctx.shadowBlur = 12;
+        ctx.shadowColor = "rgba(255,107,74,0.5)";
+        ctx.shadowBlur = 14;
+        ctx.shadowOffsetY = 3;
       } else if (piece.isPlaced) {
-        ctx.strokeStyle = popT < 1 ? C.gold : "rgba(52, 211, 153, 0.45)";
-        ctx.lineWidth = popT < 1 ? 2 : 1;
+        ctx.strokeStyle = popT < 1 ? C.gold : "rgba(52, 211, 153, 0.5)";
+        ctx.lineWidth = popT < 1 ? 2 : 1.25;
       } else {
-        ctx.strokeStyle = "rgba(245, 239, 224, 0.16)";
-        ctx.lineWidth = 1;
+        // Brighter, slightly lifted outline — keeps loose pieces readable
+        // against dark artwork without stacking heavy shadows in piles.
+        ctx.strokeStyle = "rgba(245, 239, 224, 0.42)";
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = "rgba(0,0,0,0.28)";
+        ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1.5;
       }
       ctx.stroke();
       ctx.restore();
@@ -558,7 +579,7 @@ function GameView({ roomCode }: { roomCode: string }) {
     return null;
   }
 
-  function onWheel(e: React.WheelEvent) {
+  function handleWheelZoom(e: WheelEvent) {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const newScale = Math.min(3, Math.max(0.3, scaleRef.current * delta));
@@ -571,6 +592,15 @@ function GameView({ roomCode }: { roomCode: string }) {
     offsetRef.current.x = mx - wx * newScale;
     offsetRef.current.y = my - wy * newScale;
   }
+
+  // React makes the onWheel prop passive by default, so e.preventDefault() inside it
+  // silently fails (and logs a console error) — attach it natively as non-passive instead.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.addEventListener("wheel", handleWheelZoom, { passive: false });
+    return () => canvas.removeEventListener("wheel", handleWheelZoom);
+  }, []);
 
   function onPointerDown(e: React.MouseEvent) {
     if (e.button === 2 || e.button === 1) {
@@ -726,50 +756,18 @@ function GameView({ roomCode }: { roomCode: string }) {
   const playerList = room ? Object.values(room.players) : [];
 
   return (
-    <div className="pt-app relative flex h-dvh flex-col bg-[#0F1C2E] text-[#F5EFE0]">
-      {/* Top bar */}
-      <div className="relative z-10 flex items-center justify-between border-b border-white/[0.06] bg-[#12213A] px-3 py-2.5 sm:px-5">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <Link href="/" className="group flex items-center gap-1.5">
-            <span className="text-lg transition-transform group-hover:scale-110">🧩</span>
-            <span className="font-display hidden text-sm font-semibold sm:inline">Piece Together</span>
-          </Link>
-          <span className="jb-mono rounded-md bg-white/[0.06] px-2 py-1 text-[11px] tracking-wider text-[#8A96AE]">
-            {roomCode}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 sm:gap-5">
-          <div className="flex items-center gap-2">
-            <div className="h-1.5 w-14 overflow-hidden rounded-full bg-white/[0.08] sm:w-24">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${progressPercent}%`, background: "linear-gradient(90deg, #FF6B4A, #F4B942)" }}
-              />
-            </div>
-            <span className="jb-mono text-[11px] text-[#8A96AE]">{progressPercent}%</span>
-          </div>
-
-          <span className="jb-mono text-sm text-[#C3C9D9]">{formatTime(elapsed)}</span>
-
-          <div className="hidden -space-x-2 sm:flex">
-            {playerList.map((p) => (
-              <div
-                key={p.id}
-                className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#12213A] text-xs"
-                style={{ backgroundColor: p.color + "40" }}
-                title={p.name}
-              >
-                {p.avatar}
-              </div>
-            ))}
-          </div>
-          <span className="jb-mono text-[11px] text-[#8A96AE] sm:hidden">{playerList.length}p</span>
-        </div>
-      </div>
-
-      {/* Canvas area */}
-      <div ref={containerRef} className="relative flex-1 overflow-hidden bg-[#0F1C2E]">
+    <div className="pt-app relative h-dvh w-full overflow-hidden bg-[#0F1C2E] text-[#F5EFE0]">
+      {/* Canvas — fills the whole screen, HUD floats on top */}
+      <div
+        ref={containerRef}
+        className="absolute inset-0"
+        style={{
+          backgroundColor: "#0F1C2E",
+          backgroundImage:
+            "radial-gradient(circle, rgba(245,239,224,0.05) 1px, transparent 1px), radial-gradient(ellipse 900px 620px at 50% 40%, rgba(255,138,104,0.05), transparent 70%)",
+          backgroundSize: "22px 22px, 100% 100%",
+        }}
+      >
         <canvas
           ref={canvasRef}
           className="h-full w-full touch-none cursor-crosshair"
@@ -777,7 +775,6 @@ function GameView({ roomCode }: { roomCode: string }) {
           onMouseMove={onPointerMove}
           onMouseUp={onPointerUp}
           onMouseLeave={onPointerUp}
-          onWheel={onWheel}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
@@ -785,6 +782,44 @@ function GameView({ roomCode }: { roomCode: string }) {
           onContextMenu={(e) => e.preventDefault()}
         />
       </div>
+
+      {/* Floating HUD — top-left: brand + room code */}
+      <div className="absolute left-3 top-3 z-20 flex items-center gap-2 sm:left-5 sm:top-5">
+        <Link href="/" className="hud-pill group !px-2.5">
+          <span className="text-base transition-transform group-hover:scale-110">🧩</span>
+        </Link>
+        <span className="hud-pill jb-mono text-[11px] tracking-wider text-[#C3C9D9]">{roomCode}</span>
+      </div>
+
+      {/* Floating HUD — top-right: progress, timer, players */}
+      <div className="absolute right-3 top-3 z-20 flex items-center gap-2 sm:right-5 sm:top-5">
+        <div className="hud-pill">
+          <div className="h-1.5 w-11 overflow-hidden rounded-full bg-white/10 sm:w-20">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${progressPercent}%`, background: "linear-gradient(90deg, #FF6B4A, #F4B942)" }}
+            />
+          </div>
+          <span className="jb-mono text-[10.5px] text-[#8A96AE]">{progressPercent}%</span>
+        </div>
+        <div className="hud-pill jb-mono text-[13px] text-[#F5EFE0]">{formatTime(elapsed)}</div>
+        <div className="hud-pill hidden !gap-0 sm:flex">
+          <div className="flex -space-x-2">
+            {playerList.map((p) => (
+              <div
+                key={p.id}
+                className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#16263D] text-[10px]"
+                style={{ backgroundColor: p.color + "40" }}
+                title={p.name}
+              >
+                {p.avatar}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="hud-pill jb-mono text-[11px] text-[#8A96AE] sm:hidden">{playerList.length}p</div>
+      </div>
+
 
       {/* Reference Image + guide toggle */}
       <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2">
@@ -853,7 +888,7 @@ function GameView({ roomCode }: { roomCode: string }) {
 
       {/* Chat — mobile bottom sheet */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-30 flex max-h-[65vh] flex-col rounded-t-3xl border-t border-white/10 bg-[#12213A] transition-transform duration-300 sm:hidden ${
+        className={`absolute inset-x-0 bottom-0 z-30 flex max-h-[65vh] flex-col rounded-t-3xl border-t border-white/10 bg-[#12213A] transition-transform duration-300 sm:hidden ${
           chatOpen ? "translate-y-0" : "translate-y-full"
         }`}
       >
@@ -902,7 +937,7 @@ function GameView({ roomCode }: { roomCode: string }) {
 
       {/* Victory Modal */}
       {isCompleted && completionData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm">
           <div className="modal-pop w-full max-w-md rounded-3xl border border-white/10 bg-[#16263D] p-8 text-center sm:p-10">
             <div className="text-5xl">🎉</div>
             <h2 className="font-display mt-4 text-3xl font-semibold">
@@ -1101,6 +1136,17 @@ export default function RoomPage({ params }: { params: Promise<{ roomCode: strin
         .chat-scroll::-webkit-scrollbar { width: 4px; }
         .chat-scroll::-webkit-scrollbar-thumb { background: rgba(245,239,224,0.15); border-radius: 4px; }
 
+        .hud-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.45rem;
+          padding: 0.5rem 0.85rem;
+          border-radius: 999px;
+          background: rgba(22,38,61,0.78);
+          border: 1px solid rgba(245,239,224,0.1);
+          backdrop-filter: blur(10px);
+        }
+
         .ref-pill {
           border-radius: 999px;
           padding: 0.5rem 0.9rem;
@@ -1115,7 +1161,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomCode: strin
         .ref-pill[data-active="true"] { border-color: rgba(244,185,66,0.5); color: #F5EFE0; }
 
         .chat-fab {
-          position: fixed;
+          position: absolute;
           right: 14px;
           bottom: 14px;
           z-index: 25;
