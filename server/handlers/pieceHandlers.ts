@@ -134,7 +134,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
   // unfixable gap. Now every piece must land within tolerance of its OWN unique
   // target (assigned once at generation and never touched again) before the
   // server accepts it — a piece can no longer occupy a slot that isn't its own.
-  socket.on('snap_pieces', ({ roomCode, pieceIds, targetX, targetY, groupId, isPlaced }) => {
+  socket.on('snap_pieces', ({ roomCode, anchorPieceId, pieceIds, targetX, targetY, groupId, isPlaced, neighborPieceId }) => {
     const code = roomCode.toUpperCase();
     const room = roomStore.getRoom(code);
     if (!room || !room.pieces || !room.config) return;
@@ -149,7 +149,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
     const pieceHeight = room.config.boardHeight / room.config.rows;
     const snapTolerance = Math.min(pieceWidth, pieceHeight) * 0.3;
 
-    const anchor = targetPieces[0];
+    const anchor = targetPieces.find((p) => p.id === anchorPieceId) || targetPieces[0];
     const deltaX = targetX - anchor.currentX;
     const deltaY = targetY - anchor.currentY;
 
@@ -163,7 +163,19 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
       });
 
       if (!allCorrect) {
-        socket.emit('snap_rejected', { pieceIds, reason: 'not-correct-spot' });
+        // Unlock on server
+        for (const p of targetPieces) {
+          p.lockedBy = null;
+          p.lockedByName = null;
+          p.lockedByColor = null;
+        }
+        socket.to(code).emit('piece_unlocked', { pieceId: anchor.id });
+        socket.emit('snap_rejected', {
+          pieceIds,
+          reason: 'not-correct-spot',
+          pieces: targetPieces
+        });
+        scheduleDbSave(code);
         return;
       }
 
@@ -179,12 +191,56 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
         p.lockedByColor = null;
       }
     } else {
-      // Group-merge — two loose pieces snapping together off the board. Only
-      // allow it if the pieces are actually meant to be neighbors, i.e. their
-      // relative offset matches their relative *correct* offset. Without this
-      // check, unrelated pieces could weld into a group that can never be
-      // untangled and correctly placed, which wastes just as much space as a
-      // bad board placement does.
+      // Group-merge — two loose pieces snapping together off the board.
+      // If neighborPieceId is provided, validate the adjacency
+      if (neighborPieceId) {
+        const neighbor = room.pieces.find((p) => p.id === neighborPieceId);
+        if (neighbor) {
+          const isNeighbor =
+            (Math.abs(neighbor.gridX - anchor.gridX) === 1 && neighbor.gridY === anchor.gridY) ||
+            (Math.abs(neighbor.gridY - anchor.gridY) === 1 && neighbor.gridX === anchor.gridX);
+
+          if (!isNeighbor) {
+            // Unlock on server
+            for (const p of targetPieces) {
+              p.lockedBy = null;
+              p.lockedByName = null;
+              p.lockedByColor = null;
+            }
+            socket.to(code).emit('piece_unlocked', { pieceId: anchor.id });
+            socket.emit('snap_rejected', {
+              pieceIds,
+              reason: 'not-neighbors',
+              pieces: targetPieces
+            });
+            scheduleDbSave(code);
+            return;
+          }
+
+          const expectedDX = (anchor.gridX - neighbor.gridX) * pieceWidth;
+          const expectedDY = (anchor.gridY - neighbor.gridY) * pieceHeight;
+          const actualDX = targetX - neighbor.currentX;
+          const actualDY = targetY - neighbor.currentY;
+
+          if (Math.abs(actualDX - expectedDX) > snapTolerance || Math.abs(actualDY - expectedDY) > snapTolerance) {
+            // Unlock on server
+            for (const p of targetPieces) {
+              p.lockedBy = null;
+              p.lockedByName = null;
+              p.lockedByColor = null;
+            }
+            socket.to(code).emit('piece_unlocked', { pieceId: anchor.id });
+            socket.emit('snap_rejected', {
+              pieceIds,
+              reason: 'not-neighbors',
+              pieces: targetPieces
+            });
+            scheduleDbSave(code);
+            return;
+          }
+        }
+      }
+
       const allRelativelyCorrect = targetPieces.every((p) => {
         const newX = p.currentX + deltaX;
         const newY = p.currentY + deltaY;
@@ -196,7 +252,19 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
       });
 
       if (!allRelativelyCorrect) {
-        socket.emit('snap_rejected', { pieceIds, reason: 'not-neighbors' });
+        // Unlock on server
+        for (const p of targetPieces) {
+          p.lockedBy = null;
+          p.lockedByName = null;
+          p.lockedByColor = null;
+        }
+        socket.to(code).emit('piece_unlocked', { pieceId: anchor.id });
+        socket.emit('snap_rejected', {
+          pieceIds,
+          reason: 'not-neighbors',
+          pieces: targetPieces
+        });
+        scheduleDbSave(code);
         return;
       }
 
@@ -217,6 +285,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
     const progressPercent = Math.round((placedCount / totalCount) * 100);
 
     io.to(code).emit('pieces_snapped', {
+      anchorPieceId: anchor.id,
       pieceIds,
       targetX,
       targetY,

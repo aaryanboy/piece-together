@@ -74,10 +74,10 @@ export function usePuzzleState() {
       });
     }
 
-    function onPiecesSnapped({ pieceIds, targetX, targetY, groupId, isPlaced, progressPercent }: { pieceIds: number[]; targetX: number; targetY: number; groupId: number; isPlaced: boolean; progressPercent: number }) {
+    function onPiecesSnapped({ anchorPieceId, pieceIds, targetX, targetY, groupId, isPlaced, progressPercent }: { anchorPieceId: number; pieceIds: number[]; targetX: number; targetY: number; groupId: number; isPlaced: boolean; progressPercent: number }) {
       setProgressPercent(progressPercent);
       setPieces((prev) => {
-        const anchor = prev.find((p) => pieceIds.includes(p.id));
+        const anchor = prev.find((p) => p.id === anchorPieceId) || prev.find((p) => pieceIds.includes(p.id));
         if (!anchor) return prev;
 
         const deltaX = targetX - anchor.currentX;
@@ -87,8 +87,8 @@ export function usePuzzleState() {
           if (pieceIds.includes(p.id) || (p.groupId && pieceIds.some((id) => prev.find((item) => item.id === id)?.groupId === p.groupId))) {
             return {
               ...p,
-              currentX: p.currentX + deltaX,
-              currentY: p.currentY + deltaY,
+              currentX: isPlaced ? p.targetX : p.currentX + deltaX,
+              currentY: isPlaced ? p.targetY : p.currentY + deltaY,
               groupId,
               isPlaced,
               lockedBy: null,
@@ -97,6 +97,18 @@ export function usePuzzleState() {
           return p;
         });
       });
+    }
+
+    function onSnapRejected({ pieceIds, pieces: updatedPieces }: { pieceIds: number[]; pieces: any[] }) {
+      setPieces((prev) =>
+        prev.map((p) => {
+          const match = updatedPieces.find((u) => u.id === p.id);
+          if (match) {
+            return { ...p, ...match };
+          }
+          return p;
+        })
+      );
     }
 
     function onGameCompleted({ durationSeconds }: { durationSeconds: number }) {
@@ -108,6 +120,7 @@ export function usePuzzleState() {
     socket.on('piece_unlocked', onPieceUnlocked);
     socket.on('piece_moved', onPieceMoved);
     socket.on('pieces_snapped', onPiecesSnapped);
+    socket.on('snap_rejected', onSnapRejected);
     socket.on('game_completed', onGameCompleted);
 
     return () => {
@@ -115,6 +128,7 @@ export function usePuzzleState() {
       socket.off('piece_unlocked', onPieceUnlocked);
       socket.off('piece_moved', onPieceMoved);
       socket.off('pieces_snapped', onPiecesSnapped);
+      socket.off('snap_rejected', onSnapRejected);
       socket.off('game_completed', onGameCompleted);
     };
   }, [socket]);
@@ -178,14 +192,15 @@ export function usePuzzleState() {
       // Check distance to target spot on board
       const distToTarget = Math.hypot(activePiece.currentX - activePiece.targetX, activePiece.currentY - activePiece.targetY);
 
+      const activeGroup = allPieces.filter((p) => p.groupId === activePiece.groupId || p.id === pieceId);
+
       if (distToTarget <= SNAP_DISTANCE_THRESHOLD) {
         // Snap to board target!
-        const groupPieceIds = allPieces
-          .filter((p) => p.groupId === activePiece.groupId || p.id === pieceId)
-          .map((p) => p.id);
+        const groupPieceIds = activeGroup.map((p) => p.id);
 
         socket.emit('snap_pieces', {
           roomCode: room.code,
+          anchorPieceId: activePiece.id,
           pieceIds: groupPieceIds,
           targetX: activePiece.targetX,
           targetY: activePiece.targetY,
@@ -195,49 +210,55 @@ export function usePuzzleState() {
         return;
       }
 
-      // Check distance to neighboring pieces for group snapping
+      // Check distance to neighboring pieces for group snapping (group-to-group)
       let mergedNeighbor: PuzzlePieceData | null = null;
+      let snapAnchorPiece: PuzzlePieceData | null = null;
+      let minNeighborDist = Infinity;
 
-      for (const other of allPieces) {
-        if (other.id === activePiece.id || (other.groupId && other.groupId === activePiece.groupId)) continue;
+      for (const pA of activeGroup) {
+        for (const pB of allPieces) {
+          // Skip if same piece or in same group
+          if (pB.id === pA.id || pB.groupId === pA.groupId) continue;
 
-        // Check if neighboring grid tile
-        const isNeighbor =
-          (Math.abs(other.gridX - activePiece.gridX) === 1 && other.gridY === activePiece.gridY) ||
-          (Math.abs(other.gridY - activePiece.gridY) === 1 && other.gridX === activePiece.gridX);
+          // Check if pA and pB are neighboring grid tiles
+          const isNeighbor =
+            (Math.abs(pB.gridX - pA.gridX) === 1 && pB.gridY === pA.gridY) ||
+            (Math.abs(pB.gridY - pA.gridY) === 1 && pB.gridX === pA.gridX);
 
-        if (isNeighbor) {
-          const expectedOffsetX = (activePiece.gridX - other.gridX) * activePiece.width;
-          const expectedOffsetY = (activePiece.gridY - other.gridY) * activePiece.height;
+          if (isNeighbor) {
+            const expectedOffsetX = (pA.gridX - pB.gridX) * pA.width;
+            const expectedOffsetY = (pA.gridY - pB.gridY) * pA.height;
 
-          const actualOffsetX = activePiece.currentX - other.currentX;
-          const actualOffsetY = activePiece.currentY - other.currentY;
+            const actualOffsetX = pA.currentX - pB.currentX;
+            const actualOffsetY = pA.currentY - pB.currentY;
 
-          const dist = Math.hypot(actualOffsetX - expectedOffsetX, actualOffsetY - expectedOffsetY);
+            const dist = Math.hypot(actualOffsetX - expectedOffsetX, actualOffsetY - expectedOffsetY);
 
-          if (dist <= SNAP_DISTANCE_THRESHOLD) {
-            mergedNeighbor = other;
-            break;
+            if (dist <= SNAP_DISTANCE_THRESHOLD && dist < minNeighborDist) {
+              minNeighborDist = dist;
+              mergedNeighbor = pB;
+              snapAnchorPiece = pA;
+            }
           }
         }
       }
 
-      if (mergedNeighbor) {
+      if (mergedNeighbor && snapAnchorPiece) {
         // Merge piece group into neighbor's group
-        const targetGroupX = mergedNeighbor.currentX + (activePiece.gridX - mergedNeighbor.gridX) * activePiece.width;
-        const targetGroupY = mergedNeighbor.currentY + (activePiece.gridY - mergedNeighbor.gridY) * activePiece.height;
+        const targetGroupX = mergedNeighbor.currentX + (snapAnchorPiece.gridX - mergedNeighbor.gridX) * snapAnchorPiece.width;
+        const targetGroupY = mergedNeighbor.currentY + (snapAnchorPiece.gridY - mergedNeighbor.gridY) * snapAnchorPiece.height;
 
-        const activeGroupPieceIds = allPieces
-          .filter((p) => p.groupId === activePiece.groupId || p.id === pieceId)
-          .map((p) => p.id);
+        const activeGroupPieceIds = activeGroup.map((p) => p.id);
 
         socket.emit('snap_pieces', {
           roomCode: room.code,
+          anchorPieceId: snapAnchorPiece.id,
           pieceIds: activeGroupPieceIds,
           targetX: targetGroupX,
           targetY: targetGroupY,
           groupId: mergedNeighbor.groupId,
           isPlaced: mergedNeighbor.isPlaced,
+          neighborPieceId: mergedNeighbor.id,
         });
       } else {
         // Release lock

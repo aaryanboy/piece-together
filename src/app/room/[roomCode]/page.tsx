@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import confetti from "canvas-confetti";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -10,9 +10,31 @@ import { drawPiecePath } from "@/lib/puzzleGenerator";
 import { PuzzlePieceData } from "@/types/puzzle";
 
 /* ──────────────────────────────────────────────────────────
- * PALETTE — warm parchment board, visible pieces
+ * THEME PALETTES
  * ────────────────────────────────────────────────────────── */
-const C = {
+const DARK = {
+  pageBg: "#0F1C2E",
+  boardBg: "#16263D",
+  boardBorder: "#1E3A5F",
+  panel: "#16263D",
+  coral: "#FF6B4A",
+  gold: "#F4B942",
+  paper: "#F5EFE0",
+  ink: "#F5EFE0",
+  muted: "#8A96AE",
+  mint: "#34D399",
+  pieceBorder: "rgba(245,239,224,0.35)",
+  pieceActive: "#FF6B4A",
+  piecePlaced: "#34D399",
+  grid: "rgba(244,185,66,0.07)",
+  boardOutline: "rgba(244,185,66,0.22)",
+  matDots: "rgba(245,239,224,0.03)",
+  hudBg: "rgba(22,38,61,0.78)",
+  hudBorder: "rgba(245,239,224,0.1)",
+  shadow: "rgba(0,0,0,0.28)",
+};
+
+const LIGHT = {
   pageBg: "#E8E0D4",
   boardBg: "#D4C9B8",
   boardBorder: "#B8A88C",
@@ -26,10 +48,16 @@ const C = {
   pieceBorder: "rgba(40,30,20,0.35)",
   pieceActive: "#FF6B4A",
   piecePlaced: "#34D399",
+  grid: "rgba(0,0,0,0.08)",
+  boardOutline: "rgba(0,0,0,0.18)",
+  matDots: "rgba(0,0,0,0.04)",
+  hudBg: "rgba(255,255,255,0.82)",
+  hudBorder: "rgba(0,0,0,0.08)",
+  shadow: "rgba(0,0,0,0.12)",
 };
 
 /* ──────────────────────────────────────────────────────────
- * LOBBY VIEW
+ * LOBBY VIEW — Dark theme (matches join page)
  * ────────────────────────────────────────────────────────── */
 function LobbyView({ roomCode }: { roomCode: string }) {
   const { room, player, startGame, isConnected, leaveRoom, sendChatMessage } = useRoom();
@@ -62,19 +90,19 @@ function LobbyView({ roomCode }: { roomCode: string }) {
   const emptySlots = Math.max(0, room.maxPlayers - players.length);
 
   return (
-    <div className="flex flex-1 items-center justify-center px-6 py-10 sm:py-14" style={{ background: C.pageBg, color: C.ink }}>
+    <div className="flex flex-1 items-center justify-center px-6 py-10 sm:py-14" style={{ background: DARK.pageBg, color: DARK.ink }}>
       <div className="w-full max-w-2xl space-y-5">
         <div className="fade-up text-center" style={{ animationDelay: "0ms" }}>
-          <p className="section-label !mb-3 justify-center" style={{ color: C.muted }}>Room code</p>
+          <p className="section-label !mb-3 justify-center" style={{ color: DARK.muted }}>Room code</p>
           <button onClick={copyCode} className="code-chip group">
-            <span className="jb-mono text-2xl font-bold tracking-[0.2em] sm:text-3xl" style={{ color: C.ink }}>
+            <span className="jb-mono text-2xl font-bold tracking-[0.2em] sm:text-3xl" style={{ color: DARK.paper }}>
               {roomCode}
             </span>
             <span className={"copy-flag " + (copied ? "copy-flag-active" : "")}>
               {copied ? "Copied" : "Copy"}
             </span>
           </button>
-          <p className="mt-2.5 text-xs" style={{ color: C.muted }}>Share this code with friends to join</p>
+          <p className="mt-2.5 text-xs" style={{ color: DARK.muted }}>Share this code with friends to join</p>
         </div>
 
         {room.config && (
@@ -83,11 +111,11 @@ function LobbyView({ roomCode }: { roomCode: string }) {
               src={room.config.imageUrl}
               alt={room.config.imageTitle}
               className="h-16 w-24 flex-shrink-0 rounded-xl border object-cover"
-              style={{ borderColor: "rgba(0,0,0,0.1)" }}
+              style={{ borderColor: "rgba(245,239,224,0.1)" }}
             />
             <div>
-              <p className="text-sm font-medium" style={{ color: C.ink }}>{room.config.imageTitle}</p>
-              <p className="jb-mono mt-0.5 text-[11px] uppercase tracking-wide" style={{ color: C.muted }}>
+              <p className="text-sm font-medium" style={{ color: DARK.paper }}>{room.config.imageTitle}</p>
+              <p className="jb-mono mt-0.5 text-[11px] uppercase tracking-wide" style={{ color: DARK.muted }}>
                 {room.config.totalPieces} pcs &middot; {room.config.rows}&times;{room.config.cols} &middot; up to {room.maxPlayers} players
               </p>
             </div>
@@ -96,53 +124,53 @@ function LobbyView({ roomCode }: { roomCode: string }) {
 
         <div className="fade-up" style={{ animationDelay: "140ms" }}>
           <div className="mb-3 flex items-center justify-between">
-            <label className="section-label !mb-0" style={{ color: C.muted }}>
+            <label className="section-label !mb-0" style={{ color: DARK.muted }}>
               Players ({players.length}/{room.maxPlayers})
             </label>
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: isConnected ? C.mint : C.coral }} />
-              <span className="jb-mono text-[10px] uppercase tracking-wider" style={{ color: C.muted }}>
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: isConnected ? DARK.mint : DARK.coral }} />
+              <span className="jb-mono text-[10px] uppercase tracking-wider" style={{ color: DARK.muted }}>
                 {isConnected ? "Live" : "Reconnecting…"}
               </span>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {players.map((p) => (
-              <div key={p.id} className="player-slot" style={{ background: "rgba(0,0,0,0.03)", borderColor: "rgba(0,0,0,0.08)" }}>
+              <div key={p.id} className="player-slot" style={{ background: "rgba(245,239,224,0.03)", borderColor: "rgba(245,239,224,0.06)" }}>
                 <div className="flex h-8 w-8 items-center justify-center rounded-full text-base" style={{ backgroundColor: p.color + "30", border: `2px solid ${p.color}` }}>
                   {p.avatar}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium" style={{ color: C.ink }}>{p.name}</p>
+                  <p className="truncate text-sm font-medium" style={{ color: DARK.paper }}>{p.name}</p>
                   {p.isHost && (
-                    <span className="jb-mono text-[9.5px] uppercase tracking-wider" style={{ color: C.gold }}>Host</span>
+                    <span className="jb-mono text-[9.5px] uppercase tracking-wider" style={{ color: DARK.gold }}>Host</span>
                   )}
                 </div>
               </div>
             ))}
             {Array.from({ length: emptySlots }).map((_, i) => (
               <div key={`empty-${i}`} className="empty-slot">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-dashed text-sm" style={{ borderColor: "rgba(0,0,0,0.15)", color: C.muted }}>?</div>
-                <span className="jb-mono text-[11px]" style={{ color: C.muted }}>Waiting…</span>
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-dashed text-sm" style={{ borderColor: "rgba(244,185,66,0.18)", color: "#5C6A85" }}>?</div>
+                <span className="jb-mono text-[11px]" style={{ color: "#5C6A85" }}>Waiting…</span>
               </div>
             ))}
           </div>
         </div>
 
         <div className="fade-up" style={{ animationDelay: "210ms" }}>
-          <label className="section-label" style={{ color: C.muted }}>Chat</label>
-          <div className="chat-scroll h-28 space-y-1.5 overflow-y-auto rounded-xl border p-3 pr-1" style={{ background: "rgba(0,0,0,0.02)", borderColor: "rgba(0,0,0,0.08)" }}>
+          <label className="section-label" style={{ color: DARK.muted }}>Chat</label>
+          <div className="chat-scroll h-28 space-y-1.5 overflow-y-auto rounded-xl border p-3 pr-1" style={{ background: "rgba(245,239,224,0.02)", borderColor: "rgba(245,239,224,0.08)" }}>
             {room.chat.length === 0 ? (
-              <p className="py-4 text-center text-xs" style={{ color: C.muted }}>No messages yet — say hello 👋</p>
+              <p className="py-4 text-center text-xs" style={{ color: "#5C6A85" }}>No messages yet — say hello 👋</p>
             ) : (
               room.chat.map((msg) => (
                 <div key={msg.id} className="text-xs">
                   {msg.system ? (
-                    <span className="italic" style={{ color: C.muted }}>{msg.text}</span>
+                    <span className="italic" style={{ color: "#5C6A85" }}>{msg.text}</span>
                   ) : (
                     <>
                       <span className="font-medium" style={{ color: msg.senderColor }}>{msg.senderName}:</span>{" "}
-                      <span style={{ color: "#444" }}>{msg.text}</span>
+                      <span style={{ color: "#C3C9D9" }}>{msg.text}</span>
                     </>
                   )}
                 </div>
@@ -157,9 +185,9 @@ function LobbyView({ roomCode }: { roomCode: string }) {
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
               className="field-minimal !text-sm"
-              style={{ borderColor: "rgba(0,0,0,0.15)", color: C.ink }}
+              style={{ borderColor: "rgba(245,239,224,0.16)", color: DARK.paper }}
             />
-            <button onClick={handleSendChat} className="jb-mono text-xs uppercase tracking-wider hover:opacity-80" style={{ color: C.coral }}>Send</button>
+            <button onClick={handleSendChat} className="jb-mono text-xs uppercase tracking-wider hover:opacity-80" style={{ color: DARK.coral }}>Send</button>
           </div>
         </div>
 
@@ -172,7 +200,7 @@ function LobbyView({ roomCode }: { roomCode: string }) {
               className="btn-piece btn-piece-primary flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-50"
             >Start game</button>
           ) : (
-            <div className="flex flex-1 items-center justify-center rounded-[14px] border text-center text-sm" style={{ borderColor: "rgba(0,0,0,0.08)", color: C.muted }}>
+            <div className="flex flex-1 items-center justify-center rounded-[14px] border text-center text-sm" style={{ borderColor: "rgba(245,239,224,0.1)", color: DARK.muted }}>
               Waiting for host…
             </div>
           )}
@@ -183,7 +211,7 @@ function LobbyView({ roomCode }: { roomCode: string }) {
 }
 
 /* ──────────────────────────────────────────────────────────
- * GAME VIEW
+ * GAME VIEW — with light/dark theme toggle
  * ────────────────────────────────────────────────────────── */
 function GameView({ roomCode }: { roomCode: string }) {
   const { room, socket, sendChatMessage } = useRoom();
@@ -197,6 +225,48 @@ function GameView({ roomCode }: { roomCode: string }) {
     handleDragMove,
     handleDragEnd,
   } = usePuzzleState();
+
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [bgHue, setBgHue] = useState<number>(210);
+
+  const C = useMemo(() => {
+    const basePalette = theme === "dark" ? DARK : LIGHT;
+    
+    // Dynamically calculate theme colors based on bgHue slider
+    const pageBg = theme === "dark" 
+      ? `hsl(${bgHue}, 35%, 12%)` 
+      : `hsl(${bgHue}, 20%, 88%)`;
+      
+    const boardBg = theme === "dark"
+      ? `hsl(${bgHue}, 32%, 17%)`
+      : `hsl(${bgHue}, 18%, 78%)`;
+      
+    const boardBorder = theme === "dark"
+      ? `hsl(${bgHue}, 25%, 23%)`
+      : `hsl(${bgHue}, 15%, 68%)`;
+
+    const panel = theme === "dark"
+      ? `hsl(${bgHue}, 30%, 15%)`
+      : `hsl(${bgHue}, 18%, 94%)`;
+
+    const hudBg = theme === "dark"
+      ? `hsla(${bgHue}, 30%, 15%, 0.85)`
+      : `hsla(${bgHue}, 18%, 96%, 0.85)`;
+
+    const hudBorder = theme === "dark"
+      ? `hsla(${bgHue}, 30%, 25%, 0.2)`
+      : `hsla(${bgHue}, 18%, 50%, 0.15)`;
+
+    return {
+      ...basePalette,
+      pageBg,
+      boardBg,
+      boardBorder,
+      panel,
+      hudBg,
+      hudBorder,
+    };
+  }, [theme, bgHue]);
 
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
@@ -388,7 +458,7 @@ function GameView({ roomCode }: { roomCode: string }) {
     ctx.beginPath();
     ctx.roundRect(boardX - matPad, boardY - matPad, config.boardWidth + matPad * 2, config.boardHeight + matPad * 2, 16);
     ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.04)";
+    ctx.fillStyle = C.matDots;
     for (let i = 0; i < config.boardWidth + matPad * 2; i += 18) {
       for (let j = 0; j < config.boardHeight + matPad * 2; j += 18) {
         if ((i + j) % 36 === 0) ctx.fillRect(boardX - matPad + i, boardY - matPad + j, 1.5, 1.5);
@@ -398,7 +468,7 @@ function GameView({ roomCode }: { roomCode: string }) {
 
     // Board outline
     ctx.save();
-    ctx.strokeStyle = "rgba(0,0,0,0.18)";
+    ctx.strokeStyle = C.boardOutline;
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 6]);
     ctx.strokeRect(boardX, boardY, config.boardWidth, config.boardHeight);
@@ -409,7 +479,7 @@ function GameView({ roomCode }: { roomCode: string }) {
     const pw = config.boardWidth / config.cols;
     const ph = config.boardHeight / config.rows;
     ctx.save();
-    ctx.strokeStyle = "rgba(0,0,0,0.08)";
+    ctx.strokeStyle = C.grid;
     ctx.lineWidth = 1;
     for (let r = 1; r < config.rows; r++) {
       ctx.beginPath();
@@ -425,7 +495,7 @@ function GameView({ roomCode }: { roomCode: string }) {
     }
     ctx.restore();
 
-    // PIECES — FIX: active piece always on top
+    // Pieces
     const sortedPieces = [...pieces].sort((a, b) => {
       if (a.isPlaced !== b.isPlaced) return a.isPlaced ? -1 : 1;
       if (a.id === activePieceId) return 1;
@@ -469,19 +539,19 @@ function GameView({ roomCode }: { roomCode: string }) {
       ctx.drawImage(img, sx, sy, sw, sh, -tabOverflow, -tabOverflow, pw + tabOverflow * 2, ph + tabOverflow * 2);
 
       ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,0.15)";
+      ctx.shadowColor = C.shadow;
       ctx.shadowBlur = 6;
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 2;
       drawPiecePath(ctx, piece, pw, ph);
-      ctx.strokeStyle = "rgba(0,0,0,0.06)";
+      ctx.strokeStyle = theme === "dark" ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.06)";
       ctx.lineWidth = 3;
       ctx.stroke();
       ctx.restore();
 
       ctx.restore();
 
-      // Piece border — always visible
+      // Piece border
       ctx.save();
       ctx.translate(piece.currentX, piece.currentY);
       applyPop(popScale);
@@ -501,12 +571,12 @@ function GameView({ roomCode }: { roomCode: string }) {
       } else if (piece.isPlaced) {
         ctx.strokeStyle = popT < 1 ? C.gold : C.piecePlaced;
         ctx.lineWidth = popT < 1 ? 2.5 : 1.5;
-        ctx.shadowColor = popT < 1 ? C.gold : "rgba(52,211,153,0.3)";
+        ctx.shadowColor = popT < 1 ? C.gold : (theme === "dark" ? "rgba(52,211,153,0.3)" : "rgba(52,211,153,0.3)");
         ctx.shadowBlur = popT < 1 ? 10 : 4;
       } else {
         ctx.strokeStyle = C.pieceBorder;
         ctx.lineWidth = 1.8;
-        ctx.shadowColor = "rgba(0,0,0,0.12)";
+        ctx.shadowColor = C.shadow;
         ctx.shadowBlur = 4;
         ctx.shadowOffsetX = 1;
         ctx.shadowOffsetY = 2;
@@ -544,7 +614,7 @@ function GameView({ roomCode }: { roomCode: string }) {
         ctx.restore();
       }
     }
-  }, [pieces, activePieceId, room, cursors, socket]);
+  }, [pieces, activePieceId, room, cursors, socket, theme, C]);
 
   useEffect(() => {
     function tick() {
@@ -567,12 +637,11 @@ function GameView({ roomCode }: { roomCode: string }) {
     return { x, y };
   }
 
-  // FIX: tight hit-testing so tabs don't steal clicks
   function findPieceAt(x: number, y: number): PuzzlePieceData | null {
     if (!room?.config) return null;
     const pw = room.config.boardWidth / room.config.cols;
     const ph = room.config.boardHeight / room.config.rows;
-    const pad = 2; // was 0.15 * min(pw,ph) — way too fat
+    const pad = 2;
     const order = stackOrderRef.current.length ? stackOrderRef.current : pieces;
     for (let i = order.length - 1; i >= 0; i--) {
       const piece = order[i];
@@ -759,9 +828,9 @@ function GameView({ roomCode }: { roomCode: string }) {
       <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2">
         <div className="hud-pill flex items-center gap-3 px-4 py-2">
           <span className="jb-mono text-lg font-semibold tracking-wider" style={{ color: C.ink }}>{formatTime(elapsed)}</span>
-          <div className="h-4 w-px bg-black/10" />
+          <div className="h-4 w-px" style={{ background: theme === "dark" ? "rgba(245,239,224,0.15)" : "rgba(0,0,0,0.1)" }} />
           <div className="flex items-center gap-2">
-            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-black/10 sm:w-24">
+            <div className="h-1.5 w-16 overflow-hidden rounded-full sm:w-24" style={{ background: theme === "dark" ? "rgba(245,239,224,0.1)" : "rgba(0,0,0,0.1)" }}>
               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progressPercent}%`, background: "linear-gradient(90deg, #FF6B4A, #F4B942)" }} />
             </div>
             <span className="jb-mono text-[10px]" style={{ color: C.muted }}>{progressPercent}%</span>
@@ -774,9 +843,16 @@ function GameView({ roomCode }: { roomCode: string }) {
         <Link href="/" className="hud-pill group !px-2.5 !py-2 text-lg hover:scale-105 transition-transform">🧩</Link>
       </div>
 
-      {/* Top right: avatars */}
-      <div className="absolute right-3 top-3 z-20 hidden items-center gap-2 sm:right-5 sm:top-5 sm:flex">
-        <div className="hud-pill !gap-0">
+      {/* Top right: theme toggle + avatars */}
+      <div className="absolute right-3 top-3 z-20 flex items-center gap-2 sm:right-5 sm:top-5">
+        <button
+          onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+          className="hud-pill !px-3 text-lg transition-transform hover:scale-110"
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {theme === "dark" ? "☀️" : "🌙"}
+        </button>
+        <div className="hud-pill !gap-0 hidden sm:flex">
           <div className="flex -space-x-2">
             {playerList.map((p) => (
               <div key={p.id} className="flex h-6 w-6 items-center justify-center rounded-full border-2 text-[10px]" style={{ backgroundColor: p.color + "40", borderColor: C.pageBg }} title={p.name}>
@@ -787,12 +863,12 @@ function GameView({ roomCode }: { roomCode: string }) {
         </div>
       </div>
 
-      {/* Bottom center: reference + center button */}
-      <div className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2 flex items-center gap-3">
+      {/* Bottom center: reference + center button + background hue slider */}
+      <div className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2 flex flex-wrap items-center justify-center gap-3 w-max max-w-[95vw]">
         <button
           onClick={() => setShowRef((v) => !v)}
           className="hud-pill gap-2 px-4 py-2 text-sm font-medium transition-transform hover:scale-105 active:scale-95"
-          style={{ color: C.ink }}
+          style={{ background: C.hudBg, borderColor: C.hudBorder, color: C.ink }}
         >
           <span>🖼️</span> Reference
         </button>
@@ -810,23 +886,35 @@ function GameView({ roomCode }: { roomCode: string }) {
               }
             }
           }}
-          className="hud-pill px-3 py-2 text-xs font-medium"
-          style={{ color: C.muted }}
+          className="hud-pill px-3 py-2 text-xs font-medium transition-transform hover:scale-105 active:scale-95"
+          style={{ background: C.hudBg, borderColor: C.hudBorder, color: C.muted }}
           title="Reset view"
         >
           ⌖ Center
         </button>
+        <div className="hud-pill flex items-center gap-2 px-3 py-2" style={{ background: C.hudBg, borderColor: C.hudBorder }}>
+          <span className="text-xs" style={{ color: C.muted }}>🎨</span>
+          <input
+            type="range"
+            min="0"
+            max="360"
+            value={bgHue}
+            onChange={(e) => setBgHue(Number(e.target.value))}
+            className="hue-slider w-20 sm:w-28"
+            title="Adjust background color"
+          />
+        </div>
       </div>
 
       {showRef && (
-        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-2xl border bg-white p-2 shadow-2xl" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-2xl border p-2 shadow-2xl" style={{ background: theme === "dark" ? "#16263D" : "#fff", borderColor: theme === "dark" ? "rgba(245,239,224,0.1)" : "rgba(0,0,0,0.1)" }}>
           <img src={room?.config?.imageUrl} className="w-48 rounded-xl sm:w-56" alt="Reference" />
         </div>
       )}
 
       {/* Chat sidebar desktop */}
-      <div className={`absolute bottom-0 right-0 top-0 z-20 hidden w-72 flex-col border-l transition-transform duration-300 sm:flex ${chatOpen ? "translate-x-0" : "translate-x-full"}`} style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)", borderColor: "rgba(0,0,0,0.08)" }}>
-        <div className="flex items-center justify-between border-b p-3" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+      <div className={`absolute bottom-0 right-0 top-0 z-20 hidden w-72 flex-col border-l transition-transform duration-300 sm:flex ${chatOpen ? "translate-x-0" : "translate-x-full"}`} style={{ background: C.hudBg, backdropFilter: "blur(12px)", borderColor: C.hudBorder }}>
+        <div className="flex items-center justify-between border-b p-3" style={{ borderColor: C.hudBorder }}>
           <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Chat</h3>
           <button onClick={() => setChatOpen(false)} className="text-lg" style={{ color: C.muted }}>✕</button>
         </div>
@@ -838,26 +926,26 @@ function GameView({ roomCode }: { roomCode: string }) {
               ) : (
                 <>
                   <span className="font-medium" style={{ color: msg.senderColor }}>{msg.senderName}:</span>{" "}
-                  <span style={{ color: "#444" }}>{msg.text}</span>
+                  <span style={{ color: theme === "dark" ? "#C3C9D9" : "#444" }}>{msg.text}</span>
                 </>
               )}
             </div>
           ))}
         </div>
-        <div className="border-t p-3" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+        <div className="border-t p-3" style={{ borderColor: C.hudBorder }}>
           <input
             type="text" placeholder="Type…"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && chatInput.trim()) { sendChatMessage(chatInput.trim()); setChatInput(""); } }}
-            className="field-minimal !text-xs" style={{ borderColor: "rgba(0,0,0,0.15)", color: C.ink }}
+            className="field-minimal !text-xs" style={{ borderColor: theme === "dark" ? "rgba(245,239,224,0.16)" : "rgba(0,0,0,0.15)", color: C.ink }}
           />
         </div>
       </div>
 
       {/* Chat mobile */}
-      <div className={`absolute inset-x-0 bottom-0 z-30 flex max-h-[65vh] flex-col rounded-t-3xl border-t transition-transform duration-300 sm:hidden ${chatOpen ? "translate-y-0" : "translate-y-full"}`} style={{ background: "rgba(255,255,255,0.92)", backdropFilter: "blur(12px)", borderColor: "rgba(0,0,0,0.08)" }}>
-        <div className="flex items-center justify-between border-b p-4" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+      <div className={`absolute inset-x-0 bottom-0 z-30 flex max-h-[65vh] flex-col rounded-t-3xl border-t transition-transform duration-300 sm:hidden ${chatOpen ? "translate-y-0" : "translate-y-full"}`} style={{ background: C.hudBg, backdropFilter: "blur(12px)", borderColor: C.hudBorder }}>
+        <div className="flex items-center justify-between border-b p-4" style={{ borderColor: C.hudBorder }}>
           <h3 className="text-base font-semibold" style={{ color: C.ink }}>Chat</h3>
           <button onClick={() => setChatOpen(false)} className="text-lg" style={{ color: C.muted }}>✕</button>
         </div>
@@ -869,19 +957,19 @@ function GameView({ roomCode }: { roomCode: string }) {
               ) : (
                 <>
                   <span className="font-medium" style={{ color: msg.senderColor }}>{msg.senderName}:</span>{" "}
-                  <span style={{ color: "#444" }}>{msg.text}</span>
+                  <span style={{ color: theme === "dark" ? "#C3C9D9" : "#444" }}>{msg.text}</span>
                 </>
               )}
             </div>
           ))}
         </div>
-        <div className="border-t p-4 pb-6" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+        <div className="border-t p-4 pb-6" style={{ borderColor: C.hudBorder }}>
           <input
             type="text" placeholder="Type a message…"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && chatInput.trim()) { sendChatMessage(chatInput.trim()); setChatInput(""); } }}
-            className="field-minimal" style={{ borderColor: "rgba(0,0,0,0.15)", color: C.ink }}
+            className="field-minimal" style={{ borderColor: theme === "dark" ? "rgba(245,239,224,0.16)" : "rgba(0,0,0,0.15)", color: C.ink }}
           />
         </div>
       </div>
@@ -898,7 +986,7 @@ function GameView({ roomCode }: { roomCode: string }) {
       {/* Victory Modal */}
       {isCompleted && completionData && (
         <div className="absolute inset-0 z-50 flex items-center justify-center px-6" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)" }}>
-          <div className="modal-pop w-full max-w-md rounded-3xl border bg-white p-8 text-center sm:p-10" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+          <div className="modal-pop w-full max-w-md rounded-3xl border p-8 text-center sm:p-10" style={{ background: theme === "dark" ? "#16263D" : "#fff", borderColor: theme === "dark" ? "rgba(245,239,224,0.1)" : "rgba(0,0,0,0.08)" }}>
             <div className="text-5xl">🎉</div>
             <h2 className="mt-4 text-3xl font-semibold" style={{ color: C.ink }}>
               Puzzle <span className="italic" style={{ color: C.coral }}>complete!</span>
@@ -917,6 +1005,37 @@ function GameView({ roomCode }: { roomCode: string }) {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
+        .hue-slider {
+          -webkit-appearance: none;
+          appearance: none;
+          height: 6px;
+          border-radius: 999px;
+          background: linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
+          outline: none;
+          cursor: pointer;
+          transition: opacity .2s;
+        }
+        .hue-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: #fff;
+          border: 2px solid #FF6B4A;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+          cursor: pointer;
+        }
+        .hue-slider::-moz-range-thumb {
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: #fff;
+          border: 2px solid #FF6B4A;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+          cursor: pointer;
+        }
+
         .pt-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
         .font-display { font-family: 'Fraunces', serif; font-optical-sizing: auto; }
         .jb-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
@@ -930,10 +1049,10 @@ function GameView({ roomCode }: { roomCode: string }) {
 
         .field-minimal {
           width: 100%; background: transparent; border: none;
-          border-bottom: 1.5px solid rgba(0,0,0,0.15);
+          border-bottom: 1.5px solid rgba(245,239,224,0.16);
           padding: 0.5rem 0.1rem 0.6rem; font-size: 1rem; transition: border-color 0.2s ease;
         }
-        .field-minimal::placeholder { color: #9CA3AF; }
+        .field-minimal::placeholder { color: #5C6A85; }
         .field-minimal:focus { outline: none; border-color: #FF6B4A; }
 
         .btn-piece {
@@ -953,22 +1072,22 @@ function GameView({ roomCode }: { roomCode: string }) {
           transform: translateY(-2px); box-shadow: 0 12px 28px -10px rgba(255,107,74,0.65);
         }
         .btn-piece-ghost {
-          background: transparent; color: #2A2A2A; border: 1.5px solid rgba(0,0,0,0.15);
+          background: transparent; color: #F5EFE0; border: 1.5px solid rgba(245,239,224,0.18);
         }
-        .btn-piece-ghost::before { background: #fff; border: 1.5px solid rgba(0,0,0,0.15); }
-        .btn-piece-ghost:hover:not(:disabled) { border-color: rgba(0,0,0,0.35); transform: translateY(-2px); }
+        .btn-piece-ghost::before { background: #0F1C2E; border: 1.5px solid rgba(245,239,224,0.18); }
+        .btn-piece-ghost:hover:not(:disabled) { border-color: rgba(245,239,224,0.4); transform: translateY(-2px); }
 
         .code-chip {
           position: relative; display: inline-flex; align-items: center; gap: 0.9rem;
           padding: 0.9rem 1.5rem; border-radius: 16px;
-          border: 1px solid rgba(0,0,0,0.1); background: #fff;
+          border: 1px solid rgba(245,239,224,0.12); background: #16263D;
           transition: border-color 0.2s ease, transform 0.2s ease;
         }
         .code-chip:hover { border-color: rgba(255,107,74,0.4); transform: translateY(-1px); }
         .copy-flag {
           font-family: 'JetBrains Mono', ui-monospace, monospace;
           font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em;
-          color: #9CA3AF; transition: color 0.2s ease;
+          color: #6C7A94; transition: color 0.2s ease;
         }
         .copy-flag-active { color: #34D399; }
 
@@ -976,16 +1095,15 @@ function GameView({ roomCode }: { roomCode: string }) {
           display: flex; align-items: center; gap: 0.7rem;
           padding: 0.6rem 0.8rem; border-radius: 14px;
         }
-        .player-slot { background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.08); }
-        .empty-slot { background: transparent; border: 1px dashed rgba(0,0,0,0.15); animation: dash-pulse 2s ease-in-out infinite; }
+        .player-slot { background: rgba(245,239,224,0.03); border: 1px solid rgba(245,239,224,0.06); }
+        .empty-slot { background: transparent; border: 1px dashed rgba(244,185,66,0.18); animation: dash-pulse 2s ease-in-out infinite; }
 
         .chat-scroll::-webkit-scrollbar { width: 4px; }
-        .chat-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: rgba(245,239,224,0.15); border-radius: 4px; }
 
         .hud-pill {
           display: inline-flex; align-items: center; gap: 0.45rem;
           padding: 0.5rem 0.85rem; border-radius: 999px;
-          background: rgba(255,255,255,0.82); border: 1px solid rgba(0,0,0,0.08);
           backdrop-filter: blur(10px); box-shadow: 0 2px 12px rgba(0,0,0,0.06);
         }
 
@@ -996,8 +1114,8 @@ function GameView({ roomCode }: { roomCode: string }) {
         }
 
         @keyframes dash-pulse {
-          0%, 100% { border-color: rgba(0,0,0,0.12); }
-          50% { border-color: rgba(0,0,0,0.3); }
+          0%, 100% { border-color: rgba(244,185,66,0.14); }
+          50% { border-color: rgba(244,185,66,0.4); }
         }
 
         .modal-pop { animation: modal-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
@@ -1044,10 +1162,10 @@ function RoomContent({ roomCode }: { roomCode: string }) {
 
   if (!room || room.code !== roomCode) {
     return (
-      <div className="flex flex-1 items-center justify-center" style={{ background: C.pageBg }}>
+      <div className="flex flex-1 items-center justify-center" style={{ background: DARK.pageBg }}>
         <div className="space-y-4 text-center">
           <div className="pulse-piece text-4xl">🧩</div>
-          <p style={{ color: C.muted }}>Connecting to room…</p>
+          <p style={{ color: DARK.muted }}>Connecting to room…</p>
         </div>
       </div>
     );
@@ -1066,14 +1184,14 @@ export default function RoomPage({ params }: { params: Promise<{ roomCode: strin
 
   if (!roomCode) {
     return (
-      <main className="flex min-h-screen items-center justify-center" style={{ background: C.pageBg }}>
+      <main className="flex min-h-screen items-center justify-center" style={{ background: DARK.pageBg }}>
         <div className="pulse-piece text-4xl">🧩</div>
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-screen flex-col" style={{ background: C.pageBg, color: C.ink }}>
+    <main className="flex min-h-screen flex-col" style={{ background: DARK.pageBg, color: DARK.ink }}>
       <RoomContent roomCode={roomCode} />
     </main>
   );
