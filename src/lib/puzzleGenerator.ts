@@ -9,8 +9,8 @@ export function generatePuzzlePieces(config: PuzzleConfig): PuzzlePieceData[] {
   const pieceHeight = boardHeight / rows;
 
   // Board offset centered on canvas workspace
-  const boardOffsetX = 300;
-  const boardOffsetY = 150;
+  const boardOffsetX = 0;
+  const boardOffsetY = 0;
 
   // 1. Generate edge definitions
   // horizontalEdges[r][c] is the edge between (r, c) and (r, c+1)
@@ -52,20 +52,20 @@ export function generatePuzzlePieces(config: PuzzleConfig): PuzzlePieceData[] {
 
       if (scatterZone === 0) {
         // Left zone
-        currentX = Math.random() * (boardOffsetX - pieceWidth - 20) + 10;
-        currentY = Math.random() * (boardHeight + 200) + 50;
+        currentX = -Math.random() * 300 - pieceWidth - 20;
+        currentY = Math.random() * (boardHeight + 200) - 100;
       } else if (scatterZone === 1) {
         // Right zone
-        currentX = boardOffsetX + boardWidth + 40 + Math.random() * 200;
-        currentY = Math.random() * (boardHeight + 200) + 50;
+        currentX = boardWidth + 40 + Math.random() * 300;
+        currentY = Math.random() * (boardHeight + 200) - 100;
       } else if (scatterZone === 2) {
         // Top zone
-        currentX = Math.random() * (boardWidth + 400);
-        currentY = Math.random() * 80 + 20;
+        currentX = Math.random() * (boardWidth + 200) - 100;
+        currentY = -Math.random() * 200 - pieceHeight - 50;
       } else {
         // Bottom zone
-        currentX = Math.random() * (boardWidth + 400);
-        currentY = boardOffsetY + boardHeight + 40 + Math.random() * 150;
+        currentX = Math.random() * (boardWidth + 200) - 100;
+        currentY = boardHeight + 40 + Math.random() * 200;
       }
 
       const currentId = pieceId++;
