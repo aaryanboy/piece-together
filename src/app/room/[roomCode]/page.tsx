@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import confetti from "canvas-confetti";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useRoom } from "@/context/RoomContext";
 import { usePuzzleState } from "@/hooks/usePuzzleState";
@@ -53,7 +52,6 @@ const DARK_THEME = {
 };
 
 export default function RoomPage() {
-  const router = useRouter();
   const { room, socket } = useRoom();
 
   const {
@@ -86,21 +84,26 @@ export default function RoomPage() {
   const lastPanPos = useRef({ x: 0, y: 0 });
   const pinchRef = useRef<{ dist: number; scale: number; mid: { x: number; y: number }; offset: { x: number; y: number } } | null>(null);
 
-  // Stack order & cursors
+  // Stack order, cursors & UI state
   const stackOrderRef = useRef<PuzzlePieceData[]>([]);
   const [cursors, setCursors] = useState<Record<string, { x: number; y: number }>>({});
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatText, setChatText] = useState("");
+  const [mobileStatsOpen, setMobileStatsOpen] = useState(false);
   const [showRef, setShowRef] = useState(false);
   const [autoSnapEnabled, setAutoSnapEnabled] = useState(true);
-  const [placedAnimTrigger, setPlacedAnimTrigger] = useState(false);
+
+  // Trigger celebratory confetti on completion
+  useEffect(() => {
+    if (isCompleted) {
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+    }
+  }, [isCompleted]);
 
   // Audio effects
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   const getAudioCtx = useCallback(() => {
     if (!audioCtxRef.current) {
-      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (Ctx) audioCtxRef.current = new Ctx();
     }
     if (audioCtxRef.current && audioCtxRef.current.state === "suspended") {
@@ -163,8 +166,6 @@ export default function RoomPage() {
 
     function onPiecesSnapped() {
       playSnapSound();
-      setPlacedAnimTrigger(true);
-      setTimeout(() => setPlacedAnimTrigger(false), 300);
     }
 
     socket.on("cursor_updated", onCursorUpdated);
@@ -281,7 +282,6 @@ export default function RoomPage() {
         ctx.scale(1.04, 1.04);
       }
 
-      // Clip image to piece tab path
       drawPiecePath(ctx, piece, pw, ph);
       ctx.clip();
 
@@ -601,21 +601,30 @@ export default function RoomPage() {
     }
   };
 
-  const playerList = useMemo(() => (room?.players ? Object.values(room.players) : []), [room?.players]);
-
   return (
     <div className="relative flex h-dvh w-full overflow-hidden select-none" style={{ backgroundColor: C.pageBg, color: C.textPrimary }}>
       {/* ──────────────────────────────────────────────────────────
-       * LEFT SIDEBAR PANEL (Inspired by Sample Image 3)
+       * LEFT SIDEBAR PANEL (Desktop + Mobile Drawer)
        * ────────────────────────────────────────────────────────── */}
-      <div className="z-20 hidden w-80 flex-col gap-4 p-5 sm:flex" style={{ backgroundColor: C.pageBg }}>
+      <div
+        className={`z-30 flex flex-col gap-4 p-5 transition-transform duration-300 ${
+          mobileStatsOpen ? "fixed inset-y-0 left-0 w-80 shadow-2xl translate-x-0" : "hidden sm:flex sm:w-80 sm:relative sm:translate-x-0"
+        }`}
+        style={{ backgroundColor: C.pageBg }}
+      >
+        {/* Mobile Close Button */}
+        <div className="flex items-center justify-between sm:hidden pb-1 border-b" style={{ borderColor: C.cardBorder }}>
+          <span className="text-xs font-bold uppercase tracking-wider">Puzzle Details</span>
+          <button onClick={() => setMobileStatsOpen(false)} className="text-sm font-bold px-2 py-1">✕</button>
+        </div>
+
         {/* Title Header Card */}
         <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: C.headerGreen, color: C.headerText }}>
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold tracking-wide truncate">
               {room?.config ? `${room.config.cols}×${room.config.rows} Jigsaw` : "Puzzle Room"}
             </h2>
-            <span className="text-xs opacity-75">#{room?.code}</span>
+            <span className="text-xs font-mono opacity-85">Code: {room?.code}</span>
           </div>
         </div>
 
@@ -627,7 +636,7 @@ export default function RoomPage() {
               {placedPiecesCount} <span className="text-sm font-normal" style={{ color: C.textMuted }}>/ {totalPiecesCount}</span>
             </div>
           </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: C.pageBg, color: C.textPrimary }}>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg" style={{ backgroundColor: C.pageBg, color: C.textPrimary }}>
             🧩
           </div>
         </div>
@@ -670,8 +679,8 @@ export default function RoomPage() {
           <button onClick={() => setShowRef((v) => !v)} className="flex flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5">
             <span>🖼️</span> Gallery
           </button>
-          <button onClick={() => setChatOpen((v) => !v)} className="flex flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5">
-            <span>💬</span> Chat
+          <button onClick={() => handleFixPlacedPieces()} className="flex flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5">
+            <span>✨</span> Fix
           </button>
         </div>
       </div>
@@ -694,10 +703,38 @@ export default function RoomPage() {
           onContextMenu={(e) => e.preventDefault()}
         />
 
+        {/* Mobile top action row */}
+        <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between sm:hidden">
+          <button
+            onClick={() => setMobileStatsOpen(true)}
+            className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-md"
+            style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+          >
+            📊 Details
+          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleFixPlacedPieces}
+              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-md transition-transform active:scale-95"
+              style={{ backgroundColor: C.headerGreen }}
+            >
+              ✨ Fix Board
+            </button>
+            <button
+              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              className="flex h-8 w-8 items-center justify-center rounded-full border shadow-md"
+              style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+            >
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
+          </div>
+        </div>
+
         {/* ──────────────────────────────────────────────────────────
-         * TOP CENTER HUD TIMER PILL & UTILITY BUTTONS
+         * TOP CENTER HUD TIMER PILL (Desktop)
          * ────────────────────────────────────────────────────────── */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 hidden sm:flex items-center gap-3">
           <div className="flex items-center gap-3 rounded-full border px-5 py-2 shadow-md backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
             <span className="font-mono text-base font-bold">{formatTime(elapsed)}</span>
             <div className="h-4 w-px bg-current opacity-20" />
@@ -732,10 +769,10 @@ export default function RoomPage() {
             Pieces snap automatically when placed close to their target or neighboring pieces.
           </p>
 
-          {/* Auto-Align & Error Fixer Button */}
+          {/* Large, touch-friendly Auto-Align & Error Fixer Button */}
           <button
             onClick={handleFixPlacedPieces}
-            className="mt-1 flex items-center justify-center gap-2 rounded-xl py-2.5 px-3 text-xs font-semibold text-white shadow-sm transition-transform hover:scale-[1.02] active:scale-[0.98]"
+            className="mt-1 flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-bold text-white shadow-md transition-transform hover:scale-[1.02] active:scale-[0.98]"
             style={{ backgroundColor: C.headerGreen }}
             title="Automatically check and snap misaligned or stuck pieces into place"
           >
@@ -746,25 +783,32 @@ export default function RoomPage() {
         {/* ──────────────────────────────────────────────────────────
          * BOTTOM FLOATING CONTROL BAR (Reference, Center, Zoom)
          * ────────────────────────────────────────────────────────── */}
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 rounded-full border px-4 py-2 shadow-lg backdrop-blur-md max-w-[95vw] overflow-x-auto" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 sm:gap-3 rounded-full border px-3 py-2 sm:px-4 shadow-lg backdrop-blur-md max-w-[94vw] overflow-x-auto" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
           <button
             onClick={() => setShowRef((v) => !v)}
-            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+            className="flex items-center gap-1 sm:gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
           >
-            <span>🖼️</span> Reference
+            <span>🖼️</span> Ref
           </button>
 
           <button
             onClick={handleCenterView}
-            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+            className="flex items-center gap-1 sm:gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
           >
             <span>🎯</span> Center
+          </button>
+
+          <button
+            onClick={handleFixPlacedPieces}
+            className="flex sm:hidden items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+          >
+            <span>✨</span> Fix
           </button>
 
           <div className="h-4 w-px bg-current opacity-20" />
 
           {/* Zoom controls */}
-          <div className="flex items-center gap-2 font-mono text-xs font-semibold">
+          <div className="flex items-center gap-1.5 sm:gap-2 font-mono text-xs font-bold">
             <button
               onClick={() => handleZoomChange(-0.15)}
               className="flex h-7 w-7 items-center justify-center rounded-full border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
@@ -772,7 +816,7 @@ export default function RoomPage() {
             >
               −
             </button>
-            <span className="w-10 text-center">{zoomPercent}%</span>
+            <span className="w-9 sm:w-10 text-center">{zoomPercent}%</span>
             <button
               onClick={() => handleZoomChange(0.15)}
               className="flex h-7 w-7 items-center justify-center rounded-full border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
@@ -785,13 +829,13 @@ export default function RoomPage() {
 
         {/* Reference Image Modal */}
         {showRef && room?.config?.imageUrl && (
-          <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-2xl border p-3 shadow-2xl backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+          <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-2xl border p-3 shadow-2xl backdrop-blur-md max-w-[90vw]" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
             <div className="flex items-center justify-between pb-2 border-b mb-2" style={{ borderColor: C.cardBorder }}>
               <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Reference Image</span>
               <button onClick={() => setShowRef(false)} className="text-xs font-bold px-2 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/5">✕</button>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={room.config.imageUrl} alt="Reference" className="max-h-64 max-w-sm rounded-xl object-contain" />
+            <img src={room.config.imageUrl} alt="Reference" className="max-h-60 max-w-xs sm:max-w-sm rounded-xl object-contain" />
           </div>
         )}
       </div>
@@ -806,7 +850,7 @@ export default function RoomPage() {
               Congratulations! You completed the puzzle in <span className="font-semibold font-mono">{completionData ? formatTime(completionData.durationSeconds) : formatTime(elapsed)}</span>.
             </p>
             <div className="flex gap-3 w-full">
-              <Link href="/" className="flex-1 rounded-xl py-3 text-xs font-semibold text-center text-white transition-transform hover:scale-105" style={{ backgroundColor: C.headerGreen }}>
+              <Link href="/" className="flex-1 rounded-xl py-3.5 text-sm font-bold text-center text-white shadow-md transition-transform hover:scale-105" style={{ backgroundColor: C.headerGreen }}>
                 Return Home
               </Link>
             </div>

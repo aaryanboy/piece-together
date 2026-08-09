@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { RoomProvider, useRoom } from "@/context/RoomContext";
+import { useRoom } from "@/context/RoomContext";
 import { PRESET_IMAGES, DIFFICULTY_PRESETS } from "@/lib/constants";
 import { PuzzleConfig } from "@/types/puzzle";
 
@@ -26,7 +26,7 @@ function CreateRoomForm() {
 
   async function handleCreate() {
     if (!playerName.trim()) {
-      setError("Please enter your name");
+      setError("Please enter your display name");
       return;
     }
 
@@ -57,54 +57,55 @@ function CreateRoomForm() {
   }
 
   return (
-    <main className="pt-app relative flex h-dvh w-full flex-col overflow-hidden bg-[#0F1C2E] text-[#F5EFE0]">
-      {/* ambient glow — one accent, kept quiet */}
+    <main className="pt-app relative flex min-h-dvh w-full flex-col overflow-y-auto bg-[#0F1C2E] text-[#F5EFE0] pb-10">
+      {/* Ambient background glow */}
       <div className="pointer-events-none fixed -left-24 -top-32 h-[420px] w-[420px] rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
       <div className="pointer-events-none fixed -bottom-24 -right-16 h-[380px] w-[380px] rounded-full bg-[#F4B942]/8 blur-[100px]" />
 
-      {/* floating brand mark — not a header bar */}
+      {/* Floating brand link */}
       <Link
         href="/"
         className="group absolute left-5 top-5 z-20 flex items-center gap-1.5 sm:left-8 sm:top-6"
       >
-        <span className="text-lg transition-transform group-hover:scale-110">🧩</span>
+        <span className="text-xl transition-transform group-hover:scale-110">🧩</span>
         <span className="font-display hidden text-sm font-semibold text-[#F5EFE0]/80 sm:inline">
           Piece Together
         </span>
       </Link>
 
-      {/* floating connection pill — not a header bar */}
+      {/* Connection status pill */}
       <div className="absolute right-5 top-5 z-20 flex items-center gap-1.5 sm:right-8 sm:top-6">
         <span
-          className="inline-block h-1.5 w-1.5 rounded-full"
+          className="inline-block h-2 w-2 rounded-full"
           style={{ background: isConnected ? "#34D399" : "#FF6B4A" }}
         />
-        <span className="jb-mono text-[10px] uppercase tracking-wider text-[#8A96AE]">
+        <span className="jb-mono text-xs uppercase tracking-wider text-[#8A96AE]">
           {isConnected ? "Connected" : "Connecting…"}
         </span>
       </div>
 
-      <div className="relative z-10 flex flex-1 items-center justify-center px-6 py-14 sm:px-10 md:py-8">
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pt-20 sm:px-10 md:pt-14">
         <div className="w-full max-w-4xl">
-          <div className="mb-4 text-center md:mb-6">
-            <span className="jb-mono text-[10px] uppercase tracking-[0.28em] text-[#F4B942]">
+          <div className="mb-6 text-center md:mb-8">
+            <span className="jb-mono text-xs uppercase tracking-[0.28em] text-[#F4B942]">
               New Room
             </span>
-            <h1 className="font-display mt-1.5 text-[1.9rem] font-semibold leading-tight sm:text-3xl">
+            <h1 className="font-display mt-1.5 text-3xl font-bold leading-tight sm:text-4xl">
               Set up your <span className="italic text-[#FF6B4A]">puzzle</span>
             </h1>
           </div>
 
           {error && (
-            <div className="mb-4 rounded-full border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 px-4 py-2 text-center text-xs text-[#FFB4A0]">
+            <div className="mb-6 rounded-full border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 px-4 py-2.5 text-center text-xs font-semibold text-[#FFB4A0]">
               {error}
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-[1.15fr_0.85fr] md:gap-10">
-            {/* Left — identity + image */}
-            <div className="flex flex-col gap-5">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-[1.15fr_0.85fr] md:gap-10">
+            {/* Left Column: Player Identity & Image Selector */}
+            <div className="flex flex-col gap-6">
               <div>
+                <label className="section-label">Your Name</label>
                 <input
                   type="text"
                   placeholder="Your display name…"
@@ -116,8 +117,8 @@ function CreateRoomForm() {
               </div>
 
               <div>
-                <label className="section-label">Choose an image</label>
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <label className="section-label">Choose Puzzle Image</label>
+                <div className="grid grid-cols-3 gap-3">
                   {PRESET_IMAGES.map((img) => {
                     const active = selectedImage.id === img.id;
                     return (
@@ -128,6 +129,7 @@ function CreateRoomForm() {
                         data-active={active}
                         aria-label={img.title}
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={img.thumbnail} alt={img.title} className="h-full w-full object-cover" />
                         {active && (
                           <span className="thumb-check">
@@ -143,12 +145,12 @@ function CreateRoomForm() {
               </div>
             </div>
 
-            {/* Right — config + action */}
-            <div className="flex flex-col gap-5 md:justify-between">
-              <div className="flex flex-col gap-5">
+            {/* Right Column: Settings & Big Create Button */}
+            <div className="flex flex-col gap-6 justify-between">
+              <div className="flex flex-col gap-6">
                 <div>
                   <label className="section-label">Difficulty</label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2.5">
                     {DIFFICULTY_PRESETS.map((d, i) => (
                       <button
                         key={d.label}
@@ -163,7 +165,7 @@ function CreateRoomForm() {
                 </div>
 
                 <div>
-                  <label className="section-label">Max players</label>
+                  <label className="section-label">Max Players</label>
                   <div className="stepper">
                     <button
                       type="button"
@@ -202,19 +204,20 @@ function CreateRoomForm() {
                     >
                       +
                     </button>
-                    <span className="jb-mono ml-1 text-[11px] uppercase tracking-wider text-[#8A96AE]">
+                    <span className="jb-mono ml-2 text-xs uppercase tracking-wider text-[#8A96AE]">
                       players
                     </span>
                   </div>
                 </div>
               </div>
 
+              {/* Large prominent create button */}
               <button
                 onClick={handleCreate}
                 disabled={isCreating || !isConnected}
-                className="btn-piece btn-piece-primary w-full justify-center py-3.5 text-[15px] disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-piece btn-piece-primary w-full justify-center py-4 text-base font-bold shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isCreating ? "Creating room…" : "Create room"}
+                {isCreating ? "Creating Room…" : "Create & Start Room"}
               </button>
             </div>
           </div>
@@ -222,7 +225,7 @@ function CreateRoomForm() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
         .pt-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
         .font-display { font-family: 'Fraunces', serif; font-optical-sizing: auto; }
@@ -243,8 +246,8 @@ function CreateRoomForm() {
           background: transparent;
           border: none;
           border-bottom: 1.5px solid rgba(245,239,224,0.16);
-          padding: 0.5rem 0.1rem 0.7rem;
-          font-size: 1.05rem;
+          padding: 0.6rem 0.1rem 0.7rem;
+          font-size: 1.1rem;
           color: #F5EFE0;
           transition: border-color 0.2s ease;
         }
@@ -253,14 +256,14 @@ function CreateRoomForm() {
 
         .thumb {
           position: relative;
-          border-radius: 12px;
+          border-radius: 14px;
           overflow: hidden;
           aspect-ratio: 1 / 1;
           border: 2px solid transparent;
-          opacity: 0.6;
+          opacity: 0.65;
           transition: transform 0.2s ease, opacity 0.2s ease, border-color 0.2s ease;
         }
-        .thumb:hover { opacity: 0.9; }
+        .thumb:hover { opacity: 0.95; }
         .thumb[data-active="true"] {
           opacity: 1;
           border-color: #FF6B4A;
@@ -269,10 +272,10 @@ function CreateRoomForm() {
 
         .thumb-check {
           position: absolute;
-          top: 5px;
-          right: 5px;
-          width: 17px;
-          height: 17px;
+          top: 6px;
+          right: 6px;
+          width: 18px;
+          height: 18px;
           border-radius: 50%;
           background: #F4B942;
           display: flex;
@@ -282,7 +285,7 @@ function CreateRoomForm() {
 
         .chip {
           border-radius: 999px;
-          padding: 0.6rem 1.1rem;
+          padding: 0.65rem 1.2rem;
           font-size: 0.95rem;
           font-weight: 500;
           background: transparent;
@@ -297,6 +300,7 @@ function CreateRoomForm() {
           background: rgba(255,107,74,0.14);
           border-color: #FF6B4A;
           color: #F5EFE0;
+          font-weight: 600;
         }
 
         .stepper {
@@ -306,13 +310,13 @@ function CreateRoomForm() {
         }
 
         .stepper-btn {
-          width: 34px;
-          height: 34px;
+          width: 38px;
+          height: 38px;
           border-radius: 50%;
           border: 1px solid rgba(245,239,224,0.18);
           background: transparent;
           color: #F5EFE0;
-          font-size: 1.1rem;
+          font-size: 1.2rem;
           line-height: 1;
           display: flex;
           align-items: center;
@@ -327,7 +331,7 @@ function CreateRoomForm() {
         .stepper-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
         .stepper-input {
-          width: 3.2rem;
+          width: 3.5rem;
           background: transparent;
           border: none;
           border-bottom: 1.5px solid rgba(245,239,224,0.16);
@@ -352,31 +356,15 @@ function CreateRoomForm() {
           display: inline-flex;
           align-items: center;
           gap: 0.5rem;
-          padding: 0.85rem 1.6rem 0.85rem 2rem;
-          border-radius: 14px;
-          font-weight: 600;
-          transition: transform 0.25s ease, box-shadow 0.25s ease;
+          padding: 1rem 1.8rem;
+          border-radius: 16px;
+          font-weight: 700;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
           white-space: nowrap;
         }
-        .btn-piece::before {
-          content: "";
-          position: absolute;
-          left: -7px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 15px;
-          height: 15px;
-          border-radius: 50%;
-        }
         .btn-piece-primary { background: #FF6B4A; color: #0F1C2E; }
-        .btn-piece-primary::before { background: #FF6B4A; }
         .btn-piece-primary:hover:not(:disabled) {
-          transform: translateY(-2px);
           box-shadow: 0 12px 28px -10px rgba(255,107,74,0.65);
-        }
-
-        @media (max-height: 700px) {
-          .thumb-check svg { width: 8px; }
         }
       `}</style>
     </main>
