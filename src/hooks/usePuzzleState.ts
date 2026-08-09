@@ -57,14 +57,15 @@ export function usePuzzleState() {
     function onPieceMoved({ pieceId, x, y }: { pieceId: number; x: number; y: number }) {
       setPieces((prev) => {
         const target = prev.find((p) => p.id === pieceId);
-        if (!target) return prev;
-
-        const deltaX = x - target.currentX;
-        const deltaY = y - target.currentY;
+        if (!target || target.isPlaced) return prev;
 
         return prev.map((p) => {
           if (p.groupId && p.groupId === target.groupId) {
-            return { ...p, currentX: p.currentX + deltaX, currentY: p.currentY + deltaY };
+            return {
+              ...p,
+              currentX: x + (p.targetX - target.targetX),
+              currentY: y + (p.targetY - target.targetY),
+            };
           }
           if (p.id === pieceId) {
             return { ...p, currentX: x, currentY: y };
@@ -74,24 +75,57 @@ export function usePuzzleState() {
       });
     }
 
-    function onPiecesSnapped({ anchorPieceId, pieceIds, targetX, targetY, groupId, isPlaced, progressPercent }: { anchorPieceId: number; pieceIds: number[]; targetX: number; targetY: number; groupId: number; isPlaced: boolean; progressPercent: number }) {
+    function onPiecesSnapped({
+      anchorPieceId,
+      pieceIds,
+      targetX,
+      targetY,
+      groupId,
+      isPlaced,
+      progressPercent,
+      pieces: serverPieces,
+    }: {
+      anchorPieceId: number;
+      pieceIds: number[];
+      targetX: number;
+      targetY: number;
+      groupId: number;
+      isPlaced: boolean;
+      progressPercent: number;
+      pieces?: PuzzlePieceData[];
+    }) {
       setProgressPercent(progressPercent);
       setPieces((prev) => {
+        if (serverPieces && serverPieces.length > 0) {
+          return prev.map((p) => {
+            const match = serverPieces.find((s) => s.id === p.id);
+            if (match) {
+              return {
+                ...p,
+                ...match,
+                lockedBy: null,
+                lockedByName: null,
+                lockedByColor: null,
+              };
+            }
+            return p;
+          });
+        }
+
         const anchor = prev.find((p) => p.id === anchorPieceId) || prev.find((p) => pieceIds.includes(p.id));
         if (!anchor) return prev;
-
-        const deltaX = targetX - anchor.currentX;
-        const deltaY = targetY - anchor.currentY;
 
         return prev.map((p) => {
           if (pieceIds.includes(p.id) || (p.groupId && pieceIds.some((id) => prev.find((item) => item.id === id)?.groupId === p.groupId))) {
             return {
               ...p,
-              currentX: isPlaced ? p.targetX : p.currentX + deltaX,
-              currentY: isPlaced ? p.targetY : p.currentY + deltaY,
+              currentX: isPlaced ? p.targetX : targetX + (p.targetX - anchor.targetX),
+              currentY: isPlaced ? p.targetY : targetY + (p.targetY - anchor.targetY),
               groupId,
               isPlaced,
               lockedBy: null,
+              lockedByName: null,
+              lockedByColor: null,
             };
           }
           return p;
@@ -138,7 +172,7 @@ export function usePuzzleState() {
     (pieceId: number) => {
       if (!room) return;
       const target = piecesRef.current.find((p) => p.id === pieceId);
-      if (!target || (target.lockedBy && target.lockedBy !== socket.id)) return;
+      if (!target || target.isPlaced || (target.lockedBy && target.lockedBy !== socket.id)) return;
 
       setActivePieceId(pieceId);
       socket.emit('lock_piece', { roomCode: room.code, pieceId });
@@ -154,14 +188,15 @@ export function usePuzzleState() {
       // Optimistic local update
       setPieces((prev) => {
         const target = prev.find((p) => p.id === pieceId);
-        if (!target) return prev;
-
-        const deltaX = x - target.currentX;
-        const deltaY = y - target.currentY;
+        if (!target || target.isPlaced) return prev;
 
         return prev.map((p) => {
           if (p.groupId && p.groupId === target.groupId) {
-            return { ...p, currentX: p.currentX + deltaX, currentY: p.currentY + deltaY };
+            return {
+              ...p,
+              currentX: x + (p.targetX - target.targetX),
+              currentY: y + (p.targetY - target.targetY),
+            };
           }
           if (p.id === pieceId) {
             return { ...p, currentX: x, currentY: y };
@@ -184,19 +219,35 @@ export function usePuzzleState() {
       const allPieces = piecesRef.current;
       const activePiece = allPieces.find((p) => p.id === pieceId);
 
-      if (!activePiece) {
+      if (!activePiece || activePiece.isPlaced) {
         socket.emit('unlock_piece', { roomCode: room.code, pieceId });
         return;
       }
 
+      const activeGroup = allPieces.filter((p) => p.groupId === activePiece.groupId || p.id === pieceId);
+
       // Check distance to target spot on board
       const distToTarget = Math.hypot(activePiece.currentX - activePiece.targetX, activePiece.currentY - activePiece.targetY);
 
-      const activeGroup = allPieces.filter((p) => p.groupId === activePiece.groupId || p.id === pieceId);
-
       if (distToTarget <= SNAP_DISTANCE_THRESHOLD) {
-        // Snap to board target!
+        // Optimistic local snap to board target!
         const groupPieceIds = activeGroup.map((p) => p.id);
+        setPieces((prev) =>
+          prev.map((p) => {
+            if (groupPieceIds.includes(p.id)) {
+              return {
+                ...p,
+                currentX: p.targetX,
+                currentY: p.targetY,
+                isPlaced: true,
+                lockedBy: null,
+                lockedByName: null,
+                lockedByColor: null,
+              };
+            }
+            return p;
+          })
+        );
 
         socket.emit('snap_pieces', {
           roomCode: room.code,
@@ -217,17 +268,15 @@ export function usePuzzleState() {
 
       for (const pA of activeGroup) {
         for (const pB of allPieces) {
-          // Skip if same piece or in same group
           if (pB.id === pA.id || pB.groupId === pA.groupId) continue;
 
-          // Check if pA and pB are neighboring grid tiles
           const isNeighbor =
             (Math.abs(pB.gridX - pA.gridX) === 1 && pB.gridY === pA.gridY) ||
             (Math.abs(pB.gridY - pA.gridY) === 1 && pB.gridX === pA.gridX);
 
           if (isNeighbor) {
-            const expectedOffsetX = (pA.gridX - pB.gridX) * pA.width;
-            const expectedOffsetY = (pA.gridY - pB.gridY) * pA.height;
+            const expectedOffsetX = pA.targetX - pB.targetX;
+            const expectedOffsetY = pA.targetY - pB.targetY;
 
             const actualOffsetX = pA.currentX - pB.currentX;
             const actualOffsetY = pA.currentY - pB.currentY;
@@ -244,11 +293,31 @@ export function usePuzzleState() {
       }
 
       if (mergedNeighbor && snapAnchorPiece) {
-        // Merge piece group into neighbor's group
-        const targetGroupX = mergedNeighbor.currentX + (snapAnchorPiece.gridX - mergedNeighbor.gridX) * snapAnchorPiece.width;
-        const targetGroupY = mergedNeighbor.currentY + (snapAnchorPiece.gridY - mergedNeighbor.gridY) * snapAnchorPiece.height;
+        const targetGroupX = mergedNeighbor.currentX + (snapAnchorPiece.targetX - mergedNeighbor.targetX);
+        const targetGroupY = mergedNeighbor.currentY + (snapAnchorPiece.targetY - mergedNeighbor.targetY);
+        const targetGroupId = mergedNeighbor.groupId || mergedNeighbor.id;
+        const targetIsPlaced = mergedNeighbor.isPlaced;
 
         const activeGroupPieceIds = activeGroup.map((p) => p.id);
+
+        // Optimistic local update
+        setPieces((prev) =>
+          prev.map((p) => {
+            if (activeGroupPieceIds.includes(p.id)) {
+              return {
+                ...p,
+                currentX: targetIsPlaced ? p.targetX : targetGroupX + (p.targetX - snapAnchorPiece!.targetX),
+                currentY: targetIsPlaced ? p.targetY : targetGroupY + (p.targetY - snapAnchorPiece!.targetY),
+                groupId: targetGroupId,
+                isPlaced: targetIsPlaced,
+                lockedBy: null,
+                lockedByName: null,
+                lockedByColor: null,
+              };
+            }
+            return p;
+          })
+        );
 
         socket.emit('snap_pieces', {
           roomCode: room.code,
@@ -256,17 +325,40 @@ export function usePuzzleState() {
           pieceIds: activeGroupPieceIds,
           targetX: targetGroupX,
           targetY: targetGroupY,
-          groupId: mergedNeighbor.groupId,
-          isPlaced: mergedNeighbor.isPlaced,
+          groupId: targetGroupId,
+          isPlaced: targetIsPlaced,
           neighborPieceId: mergedNeighbor.id,
         });
       } else {
-        // Release lock
         socket.emit('unlock_piece', { roomCode: room.code, pieceId });
       }
     },
     [socket, room, activePieceId]
   );
+
+  // Auto-align all placed or stuck pieces into exact target coordinates
+  const handleFixPlacedPieces = useCallback(() => {
+    if (!room) return;
+
+    setPieces((prev) =>
+      prev.map((p) => {
+        if (p.isPlaced || p.lockedBy !== null) {
+          return {
+            ...p,
+            currentX: p.targetX,
+            currentY: p.targetY,
+            isPlaced: true,
+            lockedBy: null,
+            lockedByName: null,
+            lockedByColor: null,
+          };
+        }
+        return p;
+      })
+    );
+
+    socket.emit('fix_placed_pieces', { roomCode: room.code });
+  }, [socket, room]);
 
   return {
     pieces,
@@ -277,5 +369,6 @@ export function usePuzzleState() {
     handleDragStart,
     handleDragMove,
     handleDragEnd,
+    handleFixPlacedPieces,
   };
 }

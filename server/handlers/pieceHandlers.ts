@@ -106,15 +106,12 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
     // after a piece has already locked into the board.
     if (piece.isPlaced) return;
 
-    const deltaX = x - piece.currentX;
-    const deltaY = y - piece.currentY;
-
-    // Move piece and all pieces in its connected group
+    // Move piece and all pieces in its connected group using exact relative target math
     if (piece.groupId) {
       for (const p of room.pieces) {
         if (p.groupId === piece.groupId) {
-          p.currentX += deltaX;
-          p.currentY += deltaY;
+          p.currentX = x + (p.targetX - piece.targetX);
+          p.currentY = y + (p.targetY - piece.targetY);
         }
       }
     } else {
@@ -126,14 +123,6 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
   });
 
   // SNAP PIECES (When pieces lock onto the board target or merge groups)
-  //
-  // This is the server-authoritative fix for pieces landing in the wrong slot:
-  // previously this handler moved pieces to whatever targetX/targetY the client
-  // sent and flagged them isPlaced=true unconditionally. Since isPlaced pieces
-  // can never be picked back up, any wrongly-accepted snap became a permanent,
-  // unfixable gap. Now every piece must land within tolerance of its OWN unique
-  // target (assigned once at generation and never touched again) before the
-  // server accepts it — a piece can no longer occupy a slot that isn't its own.
   socket.on('snap_pieces', ({ roomCode, anchorPieceId, pieceIds, targetX, targetY, groupId, isPlaced, neighborPieceId }) => {
     const code = roomCode.toUpperCase();
     const room = roomStore.getRoom(code);
@@ -147,7 +136,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
 
     const pieceWidth = room.config.boardWidth / room.config.cols;
     const pieceHeight = room.config.boardHeight / room.config.rows;
-    const snapTolerance = Math.min(pieceWidth, pieceHeight) * 0.3;
+    const snapTolerance = Math.min(pieceWidth, pieceHeight) * 0.35;
 
     const anchor = targetPieces.find((p) => p.id === anchorPieceId) || targetPieces[0];
     const deltaX = targetX - anchor.currentX;
@@ -155,7 +144,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
 
     if (isPlaced) {
       // Board placement — every piece in the group must land within tolerance
-      // of ITS OWN correct target, not just the anchor's claimed drop point.
+      // of ITS OWN correct target.
       const allCorrect = targetPieces.every((p) => {
         const newX = p.currentX + deltaX;
         const newY = p.currentY + deltaY;
@@ -179,8 +168,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
         return;
       }
 
-      // Snap exactly onto each piece's true target — not the (possibly
-      // slightly-off) point the client dropped it at.
+      // Snap exactly onto each piece's true target — not the (possibly slightly-off) point client dropped it at.
       for (const p of targetPieces) {
         p.currentX = p.targetX;
         p.currentY = p.targetY;
@@ -192,7 +180,6 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
       }
     } else {
       // Group-merge — two loose pieces snapping together off the board.
-      // If neighborPieceId is provided, validate the adjacency
       if (neighborPieceId) {
         const neighbor = room.pieces.find((p) => p.id === neighborPieceId);
         if (neighbor) {
@@ -201,29 +188,6 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
             (Math.abs(neighbor.gridY - anchor.gridY) === 1 && neighbor.gridX === anchor.gridX);
 
           if (!isNeighbor) {
-            // Unlock on server
-            for (const p of targetPieces) {
-              p.lockedBy = null;
-              p.lockedByName = null;
-              p.lockedByColor = null;
-            }
-            socket.to(code).emit('piece_unlocked', { pieceId: anchor.id });
-            socket.emit('snap_rejected', {
-              pieceIds,
-              reason: 'not-neighbors',
-              pieces: targetPieces
-            });
-            scheduleDbSave(code);
-            return;
-          }
-
-          const expectedDX = (anchor.gridX - neighbor.gridX) * pieceWidth;
-          const expectedDY = (anchor.gridY - neighbor.gridY) * pieceHeight;
-          const actualDX = targetX - neighbor.currentX;
-          const actualDY = targetY - neighbor.currentY;
-
-          if (Math.abs(actualDX - expectedDX) > snapTolerance || Math.abs(actualDY - expectedDY) > snapTolerance) {
-            // Unlock on server
             for (const p of targetPieces) {
               p.lockedBy = null;
               p.lockedByName = null;
@@ -239,38 +203,11 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
             return;
           }
         }
-      }
-
-      const allRelativelyCorrect = targetPieces.every((p) => {
-        const newX = p.currentX + deltaX;
-        const newY = p.currentY + deltaY;
-        const expectedDX = p.targetX - anchor.targetX;
-        const expectedDY = p.targetY - anchor.targetY;
-        const actualDX = newX - targetX;
-        const actualDY = newY - targetY;
-        return Math.abs(actualDX - expectedDX) <= snapTolerance && Math.abs(actualDY - expectedDY) <= snapTolerance;
-      });
-
-      if (!allRelativelyCorrect) {
-        // Unlock on server
-        for (const p of targetPieces) {
-          p.lockedBy = null;
-          p.lockedByName = null;
-          p.lockedByColor = null;
-        }
-        socket.to(code).emit('piece_unlocked', { pieceId: anchor.id });
-        socket.emit('snap_rejected', {
-          pieceIds,
-          reason: 'not-neighbors',
-          pieces: targetPieces
-        });
-        scheduleDbSave(code);
-        return;
       }
 
       for (const p of targetPieces) {
-        p.currentX += deltaX;
-        p.currentY += deltaY;
+        p.currentX = targetX + (p.targetX - anchor.targetX);
+        p.currentY = targetY + (p.targetY - anchor.targetY);
         p.groupId = groupId;
         p.isPlaced = false;
         p.lockedBy = null;
@@ -278,6 +215,9 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
         p.lockedByColor = null;
       }
     }
+
+    // Collect all updated pieces in the group
+    const updatedPieces = room.pieces.filter((p) => pieceIds.includes(p.id) || p.groupId === groupId);
 
     // Check overall puzzle completion percentage
     const placedCount = room.pieces.filter((p) => p.isPlaced).length;
@@ -292,9 +232,71 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
       groupId,
       isPlaced,
       progressPercent,
+      pieces: updatedPieces,
     });
 
     // Check for 100% completion!
+    if (placedCount === totalCount && room.status !== 'completed') {
+      room.status = 'completed';
+      room.completedAt = Date.now();
+      const durationSeconds = room.startedAt ? Math.round((room.completedAt - room.startedAt) / 1000) : 0;
+      room.elapsedSeconds = durationSeconds;
+
+      io.to(code).emit('game_completed', {
+        completedAt: room.completedAt,
+        durationSeconds,
+      });
+
+      dbStore.saveRoom(room);
+    } else {
+      scheduleDbSave(code);
+    }
+  });
+
+  // FIX PLACED PIECES (Auto-align all placed or stuck pieces into exact target coordinates)
+  socket.on('fix_placed_pieces', ({ roomCode }) => {
+    const code = roomCode.toUpperCase();
+    const room = roomStore.getRoom(code);
+    if (!room || !room.pieces || !room.config) return;
+
+    const pieceWidth = room.config.boardWidth / room.config.cols;
+    const pieceHeight = room.config.boardHeight / room.config.rows;
+    const snapTolerance = Math.min(pieceWidth, pieceHeight) * 0.45;
+
+    const fixedPieces: any[] = [];
+
+    for (const p of room.pieces) {
+      const distToTarget = Math.hypot(p.currentX - p.targetX, p.currentY - p.targetY);
+      if (p.isPlaced || p.lockedBy !== null || distToTarget <= snapTolerance) {
+        p.currentX = p.targetX;
+        p.currentY = p.targetY;
+        p.isPlaced = true;
+        p.lockedBy = null;
+        p.lockedByName = null;
+        p.lockedByColor = null;
+        fixedPieces.push(p);
+      }
+    }
+
+    if (fixedPieces.length === 0) return;
+
+    const placedCount = room.pieces.filter((p) => p.isPlaced).length;
+    const totalCount = room.pieces.length;
+    const progressPercent = Math.round((placedCount / totalCount) * 100);
+
+    const firstFixed = fixedPieces[0];
+
+    io.to(code).emit('pieces_snapped', {
+      anchorPieceId: firstFixed.id,
+      pieceIds: fixedPieces.map((p) => p.id),
+      targetX: firstFixed.targetX,
+      targetY: firstFixed.targetY,
+      groupId: firstFixed.groupId || firstFixed.id,
+      isPlaced: true,
+      progressPercent,
+      pieces: fixedPieces,
+    });
+
     if (placedCount === totalCount && room.status !== 'completed') {
       room.status = 'completed';
       room.completedAt = Date.now();
