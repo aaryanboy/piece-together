@@ -612,7 +612,7 @@ export default function RoomPage() {
     }
   };
 
-  const playerList = useMemo(() => (room?.players ? Object.values(room.players) : []), [room?.players]);
+  const playerList = useMemo(() => (room?.players ? Object.values(room.players) : []), [room]);
   const isHost = room && socket && room.hostId === socket.id;
 
   const handleStartGame = () => {
@@ -679,7 +679,7 @@ export default function RoomPage() {
             {/* Puzzle Details Summary */}
             {room?.config && (
               <div className="w-full flex items-center gap-4 rounded-2xl border border-[#26364A] bg-[#16222F] p-3 mb-6">
-                <div className="h-16 w-24 rounded-xl overflow-hidden border border-[#26364A] flex-shrink-0">
+                <div className="h-16 w-24 rounded-xl overflow-hidden border border-[#26364A] shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={room.config.imageUrl} alt="Puzzle" className="h-full w-full object-cover" />
                 </div>
