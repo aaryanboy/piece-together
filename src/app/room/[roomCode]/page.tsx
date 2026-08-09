@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import confetti from "canvas-confetti";
 import Link from "next/link";
 import { useRoom } from "@/context/RoomContext";
 import { usePuzzleState } from "@/hooks/usePuzzleState";
@@ -9,28 +8,9 @@ import { drawPiecePath } from "@/lib/puzzleGenerator";
 import { PuzzlePieceData } from "@/types/puzzle";
 
 /* ──────────────────────────────────────────────────────────
- * THEME COLOR PALETTES (Inspired by Sample Image 3)
+ * THEME COLOR PALETTES
+ * Default is NIGHT MODE (Dark Theme) per user request
  * ────────────────────────────────────────────────────────── */
-const LIGHT_THEME = {
-  pageBg: "#F4F0E8",
-  boardBg: "#EFE9DF",
-  boardBorder: "#D8CEBF",
-  boardOutline: "rgba(45,71,57,0.2)",
-  grid: "rgba(45,71,57,0.06)",
-  matDots: "rgba(45,71,57,0.03)",
-  cardBg: "#FFFFFF",
-  cardBorder: "#E4DCD0",
-  headerGreen: "#2D4739",
-  headerText: "#FFFFFF",
-  textPrimary: "#1F2937",
-  textMuted: "#6B7280",
-  accentGold: "#D97706",
-  pieceBorder: "rgba(0,0,0,0.25)",
-  pieceSeam: "rgba(0,0,0,0.20)",
-  shadowColor: "rgba(0,0,0,0.18)",
-  dragShadowColor: "rgba(0,0,0,0.38)",
-};
-
 const DARK_THEME = {
   pageBg: "#0F1720",
   boardBg: "#16222F",
@@ -51,6 +31,26 @@ const DARK_THEME = {
   dragShadowColor: "rgba(0,0,0,0.60)",
 };
 
+const LIGHT_THEME = {
+  pageBg: "#F4F0E8",
+  boardBg: "#EFE9DF",
+  boardBorder: "#D8CEBF",
+  boardOutline: "rgba(45,71,57,0.2)",
+  grid: "rgba(45,71,57,0.06)",
+  matDots: "rgba(45,71,57,0.03)",
+  cardBg: "#FFFFFF",
+  cardBorder: "#E4DCD0",
+  headerGreen: "#2D4739",
+  headerText: "#FFFFFF",
+  textPrimary: "#1F2937",
+  textMuted: "#6B7280",
+  accentGold: "#D97706",
+  pieceBorder: "rgba(0,0,0,0.25)",
+  pieceSeam: "rgba(0,0,0,0.20)",
+  shadowColor: "rgba(0,0,0,0.18)",
+  dragShadowColor: "rgba(0,0,0,0.38)",
+};
+
 export default function RoomPage() {
   const { room, socket } = useRoom();
 
@@ -66,7 +66,8 @@ export default function RoomPage() {
     handleFixPlacedPieces,
   } = usePuzzleState();
 
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  // DEFAULT TO NIGHT MODE (Dark Theme) per user request
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const C = theme === "dark" ? DARK_THEME : LIGHT_THEME;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -90,11 +91,15 @@ export default function RoomPage() {
   const [mobileStatsOpen, setMobileStatsOpen] = useState(false);
   const [showRef, setShowRef] = useState(false);
   const [autoSnapEnabled, setAutoSnapEnabled] = useState(true);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   // Trigger celebratory confetti on completion
   useEffect(() => {
     if (isCompleted) {
-      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+      import("canvas-confetti").then((mod) => {
+        const confetti = mod.default;
+        confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
+      });
     }
   }, [isCompleted]);
 
@@ -142,13 +147,16 @@ export default function RoomPage() {
     };
   }, [room?.config?.imageUrl]);
 
-  // Initial center view
+  // Initial center view — zoom out wide enough to show scattered pieces around the board
   useEffect(() => {
     if (!imageLoaded || !room?.config || !containerRef.current) return;
     const container = containerRef.current;
     const cw = container.clientWidth;
     const ch = container.clientHeight;
-    scaleRef.current = Math.min((cw * 0.75) / room.config.boardWidth, (ch * 0.75) / room.config.boardHeight, 1);
+    const scatterPad = 400; // pieces scatter up to ~400px beyond the board edges
+    const fullW = room.config.boardWidth + scatterPad * 2;
+    const fullH = room.config.boardHeight + scatterPad * 2;
+    scaleRef.current = Math.min((cw * 0.85) / fullW, (ch * 0.85) / fullH, 1);
     setZoomPercent(Math.round(scaleRef.current * 100));
     offsetRef.current = {
       x: cw / 2 - (room.config.boardWidth * scaleRef.current) / 2,
@@ -573,12 +581,15 @@ export default function RoomPage() {
   const totalPiecesCount = pieces.length;
   const placedPiecesCount = useMemo(() => pieces.filter((p) => p.isPlaced).length, [pieces]);
 
-  // Center view helper
+  // Center view helper — same wide zoom that shows scattered pieces
   const handleCenterView = () => {
     if (room?.config && containerRef.current) {
       const cw = containerRef.current.clientWidth;
       const ch = containerRef.current.clientHeight;
-      scaleRef.current = Math.min((cw * 0.75) / room.config.boardWidth, (ch * 0.75) / room.config.boardHeight, 1);
+      const scatterPad = 400;
+      const fullW = room.config.boardWidth + scatterPad * 2;
+      const fullH = room.config.boardHeight + scatterPad * 2;
+      scaleRef.current = Math.min((cw * 0.85) / fullW, (ch * 0.85) / fullH, 1);
       setZoomPercent(Math.round(scaleRef.current * 100));
       offsetRef.current = {
         x: cw / 2 - (room.config.boardWidth * scaleRef.current) / 2,
@@ -601,8 +612,123 @@ export default function RoomPage() {
     }
   };
 
+  const playerList = useMemo(() => (room?.players ? Object.values(room.players) : []), [room?.players]);
+  const isHost = room && socket && room.hostId === socket.id;
+
+  const handleStartGame = () => {
+    if (room && socket) {
+      socket.emit("start_game", { roomCode: room.code });
+    }
+  };
+
+  const copyCodeToClipboard = () => {
+    if (room?.code) {
+      navigator.clipboard.writeText(room.code);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    }
+  };
+
+  const isLobby = room?.status === "lobby";
+
+  // Loading state — room data hasn't synced from the server yet
+  if (!room) {
+    return (
+      <div className="flex h-dvh w-full items-center justify-center" style={{ backgroundColor: "#0F1720" }}>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <span className="text-5xl animate-pulse">🧩</span>
+          <span className="text-lg font-bold text-[#F3F4F6]">Connecting to room…</span>
+          <span className="text-sm text-[#9CA3AF]">Please wait while we sync with the server.</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-dvh w-full overflow-hidden select-none" style={{ backgroundColor: C.pageBg, color: C.textPrimary }}>
+      {/* ──────────────────────────────────────────────────────────
+       * WAITING LOBBY VIEW (Shown when room status is 'lobby')
+       * ────────────────────────────────────────────────────────── */}
+      {isLobby && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F1720]/95 backdrop-blur-md overflow-y-auto">
+          <div className="flex flex-col items-center text-center w-full max-w-lg rounded-3xl border border-[#26364A] bg-[#192533] p-6 sm:p-8 shadow-2xl my-auto">
+            {/* Top Game Logo */}
+            <Link href="/" className="flex items-center gap-2 mb-6 hover:scale-105 transition-transform">
+              <span className="text-3xl">🧩</span>
+              <span className="font-display text-xl font-bold tracking-wide text-[#F3F4F6]">
+                Piece Together
+              </span>
+            </Link>
+
+            {/* Room Code Card */}
+            <div className="w-full rounded-2xl border border-[#26364A] bg-[#0F1720] p-4 mb-6">
+              <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF]">Room Code</span>
+              <div className="flex items-center justify-center gap-3 mt-1">
+                <span className="font-mono text-4xl font-extrabold text-[#F59E0B] tracking-[0.25em]">
+                  {room?.code}
+                </span>
+                <button
+                  onClick={copyCodeToClipboard}
+                  className="rounded-xl bg-[#20382E] px-3 py-2 text-xs font-bold text-white transition-all hover:scale-105 active:scale-95"
+                >
+                  {copiedCode ? "✓ Copied!" : "📋 Copy"}
+                </button>
+              </div>
+            </div>
+
+            {/* Puzzle Details Summary */}
+            {room?.config && (
+              <div className="w-full flex items-center gap-4 rounded-2xl border border-[#26364A] bg-[#16222F] p-3 mb-6">
+                <div className="h-16 w-24 rounded-xl overflow-hidden border border-[#26364A] flex-shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={room.config.imageUrl} alt="Puzzle" className="h-full w-full object-cover" />
+                </div>
+                <div className="text-left truncate">
+                  <h3 className="font-bold text-sm text-[#F3F4F6] truncate">{room.config.imageTitle}</h3>
+                  <p className="text-xs text-[#9CA3AF] mt-0.5">{room.config.cols}×{room.config.rows} ({room.config.totalPieces} Pieces)</p>
+                </div>
+              </div>
+            )}
+
+            {/* Connected Players List */}
+            <div className="w-full mb-8">
+              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">
+                <span>Players</span>
+                <span>{playerList.length} / {room?.maxPlayers || 6}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 max-h-48 overflow-y-auto pr-1">
+                {playerList.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2.5 rounded-xl border border-[#26364A] bg-[#16222F] p-2.5 text-left">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm border border-white/10" style={{ backgroundColor: p.color + "40" }}>
+                      {p.avatar}
+                    </div>
+                    <div className="truncate text-xs">
+                      <span className="font-semibold text-[#F3F4F6] truncate block">{p.name}</span>
+                      {p.isHost && <span className="text-[10px] font-bold text-[#F59E0B]">HOST</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Start Game Action Button */}
+            {isHost ? (
+              <button
+                onClick={handleStartGame}
+                className="w-full rounded-2xl py-4 px-8 text-lg font-extrabold text-white shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{ backgroundColor: "#20382E" }}
+              >
+                🎮 Start Game
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#F59E0B] animate-pulse">
+                <span>⏳</span> Waiting for host to start game…
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ──────────────────────────────────────────────────────────
        * LEFT SIDEBAR PANEL (Desktop + Mobile Drawer)
        * ────────────────────────────────────────────────────────── */}
@@ -618,15 +744,13 @@ export default function RoomPage() {
           <button onClick={() => setMobileStatsOpen(false)} className="text-sm font-bold px-2 py-1">✕</button>
         </div>
 
-        {/* Title Header Card */}
-        <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: C.headerGreen, color: C.headerText }}>
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold tracking-wide truncate">
-              {room?.config ? `${room.config.cols}×${room.config.rows} Jigsaw` : "Puzzle Room"}
-            </h2>
-            <span className="text-xs font-mono opacity-85">Code: {room?.code}</span>
+        {/* Game Brand Logo Header */}
+        <Link href="/" className="flex items-center gap-2 rounded-2xl p-4 shadow-sm transition-transform hover:scale-[1.02]" style={{ backgroundColor: C.headerGreen, color: C.headerText }}>
+          <span className="text-2xl">🧩</span>
+          <div className="flex flex-col text-left">
+            <span className="font-display text-base font-bold tracking-wide leading-none">Piece Together</span>
           </div>
-        </div>
+        </Link>
 
         {/* Stats Card: Pieces */}
         <div className="flex items-center justify-between rounded-2xl border p-4 shadow-sm" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
@@ -671,16 +795,13 @@ export default function RoomPage() {
           </div>
         )}
 
-        {/* Bottom Nav Bar */}
+        {/* Bottom Nav Bar (ONLY ONE FIX BUTTON in app) */}
         <div className="mt-auto flex items-center justify-around rounded-2xl border p-2 shadow-sm" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
-          <Link href="/" className="flex flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5">
+          <Link href="/" className="flex flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-black/5 dark:hover:bg-white/5">
             <span>🏠</span> Home
           </Link>
-          <button onClick={() => setShowRef((v) => !v)} className="flex flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5">
+          <button onClick={() => setShowRef((v) => !v)} className="flex flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-black/5 dark:hover:bg-white/5">
             <span>🖼️</span> Gallery
-          </button>
-          <button onClick={() => handleFixPlacedPieces()} className="flex flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5">
-            <span>✨</span> Fix
           </button>
         </div>
       </div>
@@ -707,7 +828,7 @@ export default function RoomPage() {
         <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between sm:hidden">
           <button
             onClick={() => setMobileStatsOpen(true)}
-            className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-md"
+            className="flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold shadow-md backdrop-blur-md"
             style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
           >
             📊 Details
@@ -716,14 +837,14 @@ export default function RoomPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleFixPlacedPieces}
-              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-md transition-transform active:scale-95"
+              className="flex items-center gap-1 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-md transition-transform active:scale-95"
               style={{ backgroundColor: C.headerGreen }}
             >
               ✨ Fix Board
             </button>
             <button
               onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-              className="flex h-8 w-8 items-center justify-center rounded-full border shadow-md"
+              className="flex h-9 w-9 items-center justify-center rounded-full border shadow-md"
               style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
             >
               {theme === "dark" ? "☀️" : "🌙"}
@@ -752,7 +873,7 @@ export default function RoomPage() {
         </div>
 
         {/* ──────────────────────────────────────────────────────────
-         * RIGHT SIDEBAR ASSISTANT CARD ("Piece Snap & Error Fixer")
+         * RIGHT SIDEBAR ASSISTANT CARD ("Piece Snap & Single Error Fixer")
          * ────────────────────────────────────────────────────────── */}
         <div className="absolute top-4 right-4 z-20 hidden md:flex flex-col gap-3 w-64 rounded-2xl border p-4 shadow-lg backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
           <div className="flex items-center justify-between">
@@ -769,7 +890,7 @@ export default function RoomPage() {
             Pieces snap automatically when placed close to their target or neighboring pieces.
           </p>
 
-          {/* Large, touch-friendly Auto-Align & Error Fixer Button */}
+          {/* SINGLE Auto-Align & Error Fixer Button */}
           <button
             onClick={handleFixPlacedPieces}
             className="mt-1 flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-bold text-white shadow-md transition-transform hover:scale-[1.02] active:scale-[0.98]"
@@ -786,23 +907,16 @@ export default function RoomPage() {
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 sm:gap-3 rounded-full border px-3 py-2 sm:px-4 shadow-lg backdrop-blur-md max-w-[94vw] overflow-x-auto" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
           <button
             onClick={() => setShowRef((v) => !v)}
-            className="flex items-center gap-1 sm:gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+            className="flex items-center gap-1 sm:gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
           >
             <span>🖼️</span> Ref
           </button>
 
           <button
             onClick={handleCenterView}
-            className="flex items-center gap-1 sm:gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+            className="flex items-center gap-1 sm:gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
           >
             <span>🎯</span> Center
-          </button>
-
-          <button
-            onClick={handleFixPlacedPieces}
-            className="flex sm:hidden items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-          >
-            <span>✨</span> Fix
           </button>
 
           <div className="h-4 w-px bg-current opacity-20" />

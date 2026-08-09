@@ -50,14 +50,14 @@ function CreateRoomForm() {
 
       updateConfig(config, roomCode);
       router.push(`/room/${roomCode}`);
-    } catch (e: any) {
-      setError(e.message || "Failed to create room");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to create room");
       setIsCreating(false);
     }
   }
 
   return (
-    <main className="pt-app relative flex min-h-dvh w-full flex-col overflow-y-auto bg-[#0F1C2E] text-[#F5EFE0] pb-10">
+    <main className="pt-app relative flex min-h-dvh h-auto w-full flex-col overflow-y-auto bg-[#0F1C2E] text-[#F5EFE0] pb-32">
       {/* Ambient background glow */}
       <div className="pointer-events-none fixed -left-24 -top-32 h-[420px] w-[420px] rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
       <div className="pointer-events-none fixed -bottom-24 -right-16 h-[380px] w-[380px] rounded-full bg-[#F4B942]/8 blur-[100px]" />
@@ -65,18 +65,18 @@ function CreateRoomForm() {
       {/* Floating brand link */}
       <Link
         href="/"
-        className="group absolute left-5 top-5 z-20 flex items-center gap-1.5 sm:left-8 sm:top-6"
+        className="group absolute left-5 top-5 z-20 flex items-center gap-2 sm:left-8 sm:top-6"
       >
-        <span className="text-xl transition-transform group-hover:scale-110">🧩</span>
-        <span className="font-display hidden text-sm font-semibold text-[#F5EFE0]/80 sm:inline">
+        <span className="text-2xl transition-transform group-hover:scale-110">🧩</span>
+        <span className="font-display text-base font-bold tracking-wide text-[#F5EFE0]">
           Piece Together
         </span>
       </Link>
 
       {/* Connection status pill */}
-      <div className="absolute right-5 top-5 z-20 flex items-center gap-1.5 sm:right-8 sm:top-6">
+      <div className="absolute right-5 top-5 z-20 flex items-center gap-2 sm:right-8 sm:top-6">
         <span
-          className="inline-block h-2 w-2 rounded-full"
+          className="inline-block h-2.5 w-2.5 rounded-full shadow-sm"
           style={{ background: isConnected ? "#34D399" : "#FF6B4A" }}
         />
         <span className="jb-mono text-xs uppercase tracking-wider text-[#8A96AE]">
@@ -84,7 +84,7 @@ function CreateRoomForm() {
         </span>
       </div>
 
-      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pt-20 sm:px-10 md:pt-14">
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pt-24 sm:px-10 md:pt-16">
         <div className="w-full max-w-4xl">
           <div className="mb-6 text-center md:mb-8">
             <span className="jb-mono text-xs uppercase tracking-[0.28em] text-[#F4B942]">
@@ -96,7 +96,7 @@ function CreateRoomForm() {
           </div>
 
           {error && (
-            <div className="mb-6 rounded-full border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 px-4 py-2.5 text-center text-xs font-semibold text-[#FFB4A0]">
+            <div className="mb-6 rounded-2xl border border-[#FF6B4A]/40 bg-[#FF6B4A]/15 px-4 py-3 text-center text-xs font-bold text-[#FFB4A0] shadow-sm">
               {error}
             </div>
           )}
@@ -215,7 +215,7 @@ function CreateRoomForm() {
               <button
                 onClick={handleCreate}
                 disabled={isCreating || !isConnected}
-                className="btn-piece btn-piece-primary w-full justify-center py-4 text-base font-bold shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-piece btn-piece-primary w-full justify-center py-4 text-base font-bold shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isCreating ? "Creating Room…" : "Create & Start Room"}
               </button>
@@ -243,16 +243,16 @@ function CreateRoomForm() {
 
         .field-minimal {
           width: 100%;
-          background: transparent;
-          border: none;
-          border-bottom: 1.5px solid rgba(245,239,224,0.16);
-          padding: 0.6rem 0.1rem 0.7rem;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(245,239,224,0.16);
+          border-radius: 14px;
+          padding: 0.8rem 1rem;
           font-size: 1.1rem;
           color: #F5EFE0;
-          transition: border-color 0.2s ease;
+          transition: border-color 0.2s ease, background 0.2s ease;
         }
         .field-minimal::placeholder { color: #5C6A85; }
-        .field-minimal:focus { outline: none; border-color: #FF6B4A; }
+        .field-minimal:focus { outline: none; border-color: #FF6B4A; background: rgba(255,255,255,0.06); }
 
         .thumb {
           position: relative;

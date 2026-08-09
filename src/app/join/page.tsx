@@ -16,11 +16,11 @@ function JoinRoomForm() {
 
   async function handleJoin() {
     if (!playerName.trim()) {
-      setError("Please enter your name");
+      setError("Please enter your display name");
       return;
     }
     if (!roomCode.trim()) {
-      setError("Please enter a room code");
+      setError("Please enter the 4-digit room code");
       return;
     }
 
@@ -30,33 +30,33 @@ function JoinRoomForm() {
     try {
       await joinRoom(roomCode.trim().toUpperCase(), playerName.trim(), "🧩");
       router.push(`/room/${roomCode.trim().toUpperCase()}`);
-    } catch (e: any) {
-      setError(e.message || "Failed to join room");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to join room");
       setIsJoining(false);
     }
   }
 
   return (
-    <main className="pt-app relative flex h-dvh w-full flex-col overflow-hidden bg-[#0F1C2E] text-[#F5EFE0]">
+    <main className="pt-app relative flex min-h-dvh h-auto w-full flex-col overflow-y-auto bg-[#0F1C2E] text-[#F5EFE0] pb-28">
       {/* Ambient background glow */}
       <div className="pointer-events-none fixed -left-24 -top-32 h-[420px] w-[420px] rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
       <div className="pointer-events-none fixed -bottom-24 -right-16 h-[380px] w-[380px] rounded-full bg-[#F4B942]/8 blur-[100px]" />
 
-      {/* Header brand link */}
+      {/* Top brand logo */}
       <Link
         href="/"
-        className="group absolute left-5 top-5 z-20 flex items-center gap-1.5 sm:left-8 sm:top-6"
+        className="group absolute left-5 top-5 z-20 flex items-center gap-2 sm:left-8 sm:top-6"
       >
-        <span className="text-xl transition-transform group-hover:scale-110">🧩</span>
-        <span className="font-display hidden text-sm font-semibold text-[#F5EFE0]/80 sm:inline">
+        <span className="text-2xl transition-transform group-hover:scale-110">🧩</span>
+        <span className="font-display text-base font-bold tracking-wide text-[#F5EFE0]">
           Piece Together
         </span>
       </Link>
 
       {/* Connection status pill */}
-      <div className="absolute right-5 top-5 z-20 flex items-center gap-1.5 sm:right-8 sm:top-6">
+      <div className="absolute right-5 top-5 z-20 flex items-center gap-2 sm:right-8 sm:top-6">
         <span
-          className="inline-block h-2 w-2 rounded-full"
+          className="inline-block h-2.5 w-2.5 rounded-full shadow-sm"
           style={{ background: isConnected ? "#34D399" : "#FF6B4A" }}
         />
         <span className="jb-mono text-xs uppercase tracking-wider text-[#8A96AE]">
@@ -64,9 +64,9 @@ function JoinRoomForm() {
         </span>
       </div>
 
-      <div className="relative z-10 flex flex-1 items-center justify-center px-6">
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pt-24 sm:px-6 md:pt-16">
         <div className="w-full max-w-sm">
-          <div className="mb-8 text-center">
+          <div className="mb-6 text-center">
             <span className="jb-mono text-xs uppercase tracking-[0.28em] text-[#F4B942]">
               Join Room
             </span>
@@ -79,12 +79,12 @@ function JoinRoomForm() {
           </div>
 
           {error && (
-            <div className="mb-5 rounded-full border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 px-4 py-2.5 text-center text-xs font-semibold text-[#FFB4A0]">
+            <div className="mb-5 rounded-2xl border border-[#FF6B4A]/40 bg-[#FF6B4A]/15 px-4 py-3 text-center text-xs font-bold text-[#FFB4A0] shadow-sm">
               {error}
             </div>
           )}
 
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-5">
             <div>
               <label className="section-label">Your Name</label>
               <input
@@ -98,21 +98,21 @@ function JoinRoomForm() {
             </div>
 
             <div>
-              <label className="section-label">Room Code (4-digits)</label>
+              <label className="section-label">4-Digit Room Code</label>
               <input
                 type="text"
                 placeholder="1234"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 maxLength={6}
-                className="field-minimal jb-mono text-center text-2xl font-bold tracking-[0.25em]"
+                className="field-minimal jb-mono text-center text-3xl font-bold tracking-[0.3em] text-[#F4B942]"
               />
             </div>
 
             <button
               onClick={handleJoin}
               disabled={isJoining || !isConnected}
-              className="btn-piece btn-piece-primary mt-2 w-full justify-center py-4 text-base font-bold shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-piece btn-piece-primary mt-3 w-full justify-center py-4 text-base font-bold shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isJoining ? "Joining room…" : "Enter Room"}
             </button>
@@ -146,16 +146,16 @@ function JoinRoomForm() {
 
         .field-minimal {
           width: 100%;
-          background: transparent;
-          border: none;
-          border-bottom: 1.5px solid rgba(245,239,224,0.16);
-          padding: 0.6rem 0.1rem 0.7rem;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(245,239,224,0.16);
+          border-radius: 14px;
+          padding: 0.8rem 1rem;
           font-size: 1.1rem;
           color: #F5EFE0;
-          transition: border-color 0.2s ease;
+          transition: border-color 0.2s ease, background 0.2s ease;
         }
         .field-minimal::placeholder { color: #5C6A85; }
-        .field-minimal:focus { outline: none; border-color: #FF6B4A; }
+        .field-minimal:focus { outline: none; border-color: #FF6B4A; background: rgba(255,255,255,0.06); }
 
         .btn-piece {
           position: relative;

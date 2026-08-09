@@ -133,7 +133,7 @@ export function usePuzzleState() {
       });
     }
 
-    function onSnapRejected({ pieceIds, pieces: updatedPieces }: { pieceIds: number[]; pieces: any[] }) {
+    function onSnapRejected({ pieceIds: _pieceIds, pieces: updatedPieces }: { pieceIds: number[]; pieces: PuzzlePieceData[] }) {
       setPieces((prev) =>
         prev.map((p) => {
           const match = updatedPieces.find((u) => u.id === p.id);
