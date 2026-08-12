@@ -18,21 +18,36 @@ export function usePuzzleState() {
 
   // Sync pieces from room state
   useEffect(() => {
-    if (room?.pieces) {
+    if (room?.pieces && room.mode !== 'competitive') {
       setPieces(room.pieces);
       const placed = room.pieces.filter((p) => p.isPlaced).length;
       const total = room.pieces.length;
       if (total > 0) {
         setProgressPercent(Math.round((placed / total) * 100));
       }
+    } else if (room?.mode === 'competitive' && room.playerPieces) {
+      const myId = typeof window !== 'undefined' ? localStorage.getItem('piece-together-player-id') : null;
+      const myPieces = myId ? room.playerPieces[myId] : null;
+      if (myPieces) {
+        setPieces(myPieces);
+        const placed = myPieces.filter((p) => p.isPlaced).length;
+        const total = myPieces.length;
+        if (total > 0) {
+          setProgressPercent(Math.round((placed / total) * 100));
+        }
+      }
     }
-  }, [room?.pieces]);
+  }, [room?.pieces, room?.playerPieces, room?.mode]);
 
   // Socket listeners for real-time piece movements, locks, snaps
   useEffect(() => {
     if (!socket) return;
 
-    function onPieceLocked({ pieceId, lockedBy, lockedByName, lockedByColor }: { pieceId: number; lockedBy: string; lockedByName: string; lockedByColor: string }) {
+    const myId = typeof window !== 'undefined' ? localStorage.getItem('piece-together-player-id') : null;
+
+    function onPieceLocked({ pieceId, lockedBy, lockedByName, lockedByColor, playerId }: { pieceId: number; lockedBy: string; lockedByName: string; lockedByColor: string; playerId?: string }) {
+      if (room?.mode === 'competitive' && playerId !== myId) return;
+      
       setPieces((prev) =>
         prev.map((p) => {
           if (p.id === pieceId || (p.groupId && p.groupId === prev.find((item) => item.id === pieceId)?.groupId)) {
@@ -43,7 +58,9 @@ export function usePuzzleState() {
       );
     }
 
-    function onPieceUnlocked({ pieceId }: { pieceId: number }) {
+    function onPieceUnlocked({ pieceId, playerId }: { pieceId: number; playerId?: string }) {
+      if (room?.mode === 'competitive' && playerId !== myId) return;
+
       setPieces((prev) =>
         prev.map((p) => {
           if (p.id === pieceId || (p.groupId && p.groupId === prev.find((item) => item.id === pieceId)?.groupId)) {
@@ -54,7 +71,9 @@ export function usePuzzleState() {
       );
     }
 
-    function onPieceMoved({ pieceId, x, y }: { pieceId: number; x: number; y: number }) {
+    function onPieceMoved({ pieceId, x, y, playerId }: { pieceId: number; x: number; y: number; playerId?: string }) {
+      if (room?.mode === 'competitive' && playerId !== myId) return;
+
       setPieces((prev) => {
         const target = prev.find((p) => p.id === pieceId);
         if (!target || target.isPlaced) return prev;
@@ -83,6 +102,7 @@ export function usePuzzleState() {
       groupId,
       isPlaced,
       progressPercent,
+      playerId,
       pieces: serverPieces,
     }: {
       anchorPieceId: number;
@@ -92,8 +112,11 @@ export function usePuzzleState() {
       groupId: number;
       isPlaced: boolean;
       progressPercent: number;
+      playerId?: string;
       pieces?: PuzzlePieceData[];
     }) {
+      if (room?.mode === 'competitive' && playerId !== myId) return;
+
       setProgressPercent(progressPercent);
       setPieces((prev) => {
         if (serverPieces && serverPieces.length > 0) {
@@ -133,7 +156,9 @@ export function usePuzzleState() {
       });
     }
 
-    function onSnapRejected({ pieceIds: _pieceIds, pieces: updatedPieces }: { pieceIds: number[]; pieces: PuzzlePieceData[] }) {
+    function onSnapRejected({ pieceIds: _pieceIds, pieces: updatedPieces, playerId }: { pieceIds: number[]; pieces: PuzzlePieceData[]; playerId?: string }) {
+      if (room?.mode === 'competitive' && playerId !== myId) return;
+
       setPieces((prev) =>
         prev.map((p) => {
           const match = updatedPieces.find((u) => u.id === p.id);
@@ -165,17 +190,17 @@ export function usePuzzleState() {
       socket.off('snap_rejected', onSnapRejected);
       socket.off('game_completed', onGameCompleted);
     };
-  }, [socket]);
+  }, [socket, room?.mode]);
 
   // Handle local drag start
   const handleDragStart = useCallback(
     (pieceId: number) => {
       if (!room) return;
       const target = piecesRef.current.find((p) => p.id === pieceId);
-      if (!target || target.isPlaced || (target.lockedBy && target.lockedBy !== socket.id)) return;
+      if (!target || target.isPlaced || (target.lockedBy && target.lockedBy !== socket?.id)) return;
 
       setActivePieceId(pieceId);
-      socket.emit('lock_piece', { roomCode: room.code, pieceId });
+      socket?.emit('lock_piece', { roomCode: room.code, pieceId });
     },
     [socket, room]
   );
@@ -205,7 +230,7 @@ export function usePuzzleState() {
         });
       });
 
-      socket.emit('move_piece', { roomCode: room.code, pieceId, x, y });
+      socket?.emit('move_piece', { roomCode: room.code, pieceId, x, y });
     },
     [socket, room, activePieceId]
   );
@@ -220,7 +245,7 @@ export function usePuzzleState() {
       const activePiece = allPieces.find((p) => p.id === pieceId);
 
       if (!activePiece || activePiece.isPlaced) {
-        socket.emit('unlock_piece', { roomCode: room.code, pieceId });
+        socket?.emit('unlock_piece', { roomCode: room.code, pieceId });
         return;
       }
 
@@ -249,7 +274,7 @@ export function usePuzzleState() {
           })
         );
 
-        socket.emit('snap_pieces', {
+        socket?.emit('snap_pieces', {
           roomCode: room.code,
           anchorPieceId: activePiece.id,
           pieceIds: groupPieceIds,
@@ -261,7 +286,7 @@ export function usePuzzleState() {
         return;
       }
 
-      // Check distance to neighboring pieces for group snapping (group-to-group)
+      // Check distance to neighboring pieces for group snapping
       let mergedNeighbor: PuzzlePieceData | null = null;
       let snapAnchorPiece: PuzzlePieceData | null = null;
       let minNeighborDist = Infinity;
@@ -319,7 +344,7 @@ export function usePuzzleState() {
           })
         );
 
-        socket.emit('snap_pieces', {
+        socket?.emit('snap_pieces', {
           roomCode: room.code,
           anchorPieceId: snapAnchorPiece.id,
           pieceIds: activeGroupPieceIds,
@@ -330,7 +355,7 @@ export function usePuzzleState() {
           neighborPieceId: mergedNeighbor.id,
         });
       } else {
-        socket.emit('unlock_piece', { roomCode: room.code, pieceId });
+        socket?.emit('unlock_piece', { roomCode: room.code, pieceId });
       }
     },
     [socket, room, activePieceId]
@@ -357,7 +382,7 @@ export function usePuzzleState() {
       })
     );
 
-    socket.emit('fix_placed_pieces', { roomCode: room.code });
+    socket?.emit('fix_placed_pieces', { roomCode: room.code });
   }, [socket, room]);
 
   return {

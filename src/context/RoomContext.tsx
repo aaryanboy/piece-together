@@ -50,8 +50,12 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
     function onRoomUpdated(updatedRoom: RoomState) {
       console.log('[RoomContext] 📦 room_updated received:', updatedRoom.code, 'status:', updatedRoom.status, 'players:', Object.keys(updatedRoom.players).length);
       setRoom(updatedRoom);
-      if (socket.id && updatedRoom.players[socket.id]) {
-        setPlayer(updatedRoom.players[socket.id]);
+      const stableId = typeof window !== 'undefined' ? localStorage.getItem('piece-together-player-id') : null;
+      if (stableId && updatedRoom.players[stableId]) {
+        setPlayer(updatedRoom.players[stableId]);
+      } else if (socket.id) {
+        const p = Object.values(updatedRoom.players).find((pl) => pl.socketId === socket.id);
+        if (p) setPlayer(p);
       }
     }
 
@@ -110,13 +114,19 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(err.message);
       return Promise.reject(err);
     }
+    const stableId = typeof window !== 'undefined'
+      ? (localStorage.getItem('piece-together-player-id') || `p-${Math.random().toString(36).substring(2, 11)}`)
+      : `p-${Math.random().toString(36).substring(2, 11)}`;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('piece-together-player-id', stableId);
+    }
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         console.error('[RoomContext] ❌ create_room timed out after 10s');
         reject(new Error('Room creation timed out. Is the server running?'));
       }, 10000);
 
-      socket.emit('create_room', { playerName, avatar, maxPlayers }, (response) => {
+      socket.emit('create_room', { playerName, avatar, maxPlayers, playerId: stableId }, (response) => {
         clearTimeout(timeout);
         console.log('[RoomContext] 📨 create_room callback received:', response);
         if (response.success && response.roomCode) {
@@ -140,20 +150,29 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(err.message);
       return Promise.reject(err);
     }
+    const stableId = typeof window !== 'undefined'
+      ? (localStorage.getItem('piece-together-player-id') || `p-${Math.random().toString(36).substring(2, 11)}`)
+      : `p-${Math.random().toString(36).substring(2, 11)}`;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('piece-together-player-id', stableId);
+    }
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         console.error('[RoomContext] ❌ join_room timed out after 10s');
         reject(new Error('Join room timed out. Is the server running?'));
       }, 10000);
 
-      socket.emit('join_room', { roomCode, playerName, avatar }, (response) => {
+      socket.emit('join_room', { roomCode, playerName, avatar, playerId: stableId }, (response) => {
         clearTimeout(timeout);
         console.log('[RoomContext] 📨 join_room callback received:', response);
         if (response.success && response.room) {
           console.log('[RoomContext] ✅ Joined room:', response.room.code);
           setRoom(response.room);
-          if (socket.id && response.room.players[socket.id]) {
-            setPlayer(response.room.players[socket.id]);
+          if (stableId && response.room.players[stableId]) {
+            setPlayer(response.room.players[stableId]);
+          } else {
+            const p = Object.values(response.room.players).find((pl) => pl.socketId === socket.id);
+            if (p) setPlayer(p);
           }
           resolve(response.room);
         } else {

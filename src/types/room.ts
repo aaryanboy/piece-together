@@ -1,12 +1,15 @@
 import { PuzzleConfig, PuzzlePieceData } from './puzzle';
 
 export interface Player {
-  id: string;
+  id: string; // Stable session ID (survives reconnects)
+  socketId: string; // Current active transient socket connection ID
   name: string;
   avatar: string;
   color: string;
   isHost: boolean;
   cursor: { x: number; y: number } | null;
+  isOffline?: boolean;
+  isSpectator?: boolean;
 }
 
 export interface ChatMessage {
@@ -31,4 +34,11 @@ export interface RoomState {
   startedAt: number | null;
   completedAt: number | null;
   elapsedSeconds?: number;
+  
+  // Competitive mode state
+  mode?: 'cooperative' | 'competitive';
+  playerPieces?: Record<string, PuzzlePieceData[]>;
+  competitiveResults?: Record<string, { finishedAt: number; durationSeconds: number; place: number }>;
+  quitPlayers?: string[];
 }
+

@@ -6,6 +6,7 @@ import { useRoom } from "@/context/RoomContext";
 import { usePuzzleState } from "@/hooks/usePuzzleState";
 import { drawPiecePath } from "@/lib/puzzleGenerator";
 import { PuzzlePieceData } from "@/types/puzzle";
+import { Player } from "@/types/room";
 
 /* ──────────────────────────────────────────────────────────
  * THEME COLOR PALETTES
@@ -52,7 +53,7 @@ const LIGHT_THEME = {
 };
 
 export default function RoomPage() {
-  const { room, socket } = useRoom();
+  const { room, socket, player } = useRoom();
 
   const {
     pieces,
@@ -63,8 +64,38 @@ export default function RoomPage() {
     handleDragStart,
     handleDragMove,
     handleDragEnd,
-    handleFixPlacedPieces,
+    handleFixPlacedPieces: triggerFixPieces,
   } = usePuzzleState();
+
+  // Stable session states
+  const localPlayerId = typeof window !== 'undefined' ? localStorage.getItem('piece-together-player-id') || "" : "";
+  const isSpectator = !!player?.isSpectator;
+  const isCompletedSelf = room?.mode === 'competitive' ? !!room?.competitiveResults?.[localPlayerId] : isCompleted;
+  const isInteractive = room?.status === 'playing' && !isSpectator && !isCompletedSelf && !room?.quitPlayers?.includes(localPlayerId);
+
+  // Opponent piece states for competitive mode
+  const opponentPiecesRef = useRef<Record<string, PuzzlePieceData[]>>({});
+  const [opponentProgress, setOpponentProgress] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (room?.mode === 'competitive' && room.playerPieces) {
+      const myId = typeof window !== 'undefined' ? localStorage.getItem('piece-together-player-id') : null;
+      const currentPieces: Record<string, PuzzlePieceData[]> = {};
+      const currentProgress: Record<string, number> = {};
+      
+      for (const [pid, pPieces] of Object.entries(room.playerPieces)) {
+        if (pid === myId) continue;
+        currentPieces[pid] = pPieces;
+        
+        const placed = pPieces.filter(p => p.isPlaced).length;
+        const total = pPieces.length || 1;
+        currentProgress[pid] = Math.round((placed / total) * 100);
+      }
+      
+      opponentPiecesRef.current = currentPieces;
+      setOpponentProgress(currentProgress);
+    }
+  }, [room?.playerPieces, room?.mode]);
 
   // DEFAULT TO NIGHT MODE (Dark Theme) per user request
   const [theme, setTheme] = useState<"light" | "dark">("dark");
@@ -95,13 +126,13 @@ export default function RoomPage() {
 
   // Trigger celebratory confetti on completion
   useEffect(() => {
-    if (isCompleted) {
+    if (isCompletedSelf && !isSpectator) {
       import("canvas-confetti").then((mod) => {
         const confetti = mod.default;
         confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
       });
     }
-  }, [isCompleted]);
+  }, [isCompletedSelf, isSpectator]);
 
   // Audio effects
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -164,24 +195,149 @@ export default function RoomPage() {
     };
   }, [imageLoaded, room?.config]);
 
-  // Socket cursor & snap events
+  // Socket cursor, snap & opponent events
   useEffect(() => {
     if (!socket) return;
 
+    const myId = typeof window !== 'undefined' ? localStorage.getItem('piece-together-player-id') : null;
+
     function onCursorUpdated({ playerId, x, y }: { playerId: string; x: number; y: number }) {
+      if (playerId === myId) return;
       setCursors((prev) => ({ ...prev, [playerId]: { x, y } }));
     }
 
-    function onPiecesSnapped() {
-      playSnapSound();
+    function onPiecesSnapped(data: any) {
+      if (!data.playerId || data.playerId === myId) {
+        playSnapSound();
+      }
+      if (data.playerId && data.playerId !== myId) {
+        onOpponentPiecesSnapped(data);
+      }
+    }
+
+    function onOpponentPieceLocked(data: any) {
+      if (!data.playerId || data.playerId === myId) return;
+      const { pieceId, lockedBy, lockedByName, lockedByColor, playerId } = data;
+      const pieces = opponentPiecesRef.current[playerId];
+      if (!pieces) return;
+      opponentPiecesRef.current[playerId] = pieces.map(p => {
+        if (p.id === pieceId || (p.groupId && p.groupId === pieces.find(item => item.id === pieceId)?.groupId)) {
+          return { ...p, lockedBy, lockedByName, lockedByColor };
+        }
+        return p;
+      });
+    }
+
+    function onOpponentPieceUnlocked(data: any) {
+      if (!data.playerId || data.playerId === myId) return;
+      const { pieceId, playerId } = data;
+      const pieces = opponentPiecesRef.current[playerId];
+      if (!pieces) return;
+      opponentPiecesRef.current[playerId] = pieces.map(p => {
+        if (p.id === pieceId || (p.groupId && p.groupId === pieces.find(item => item.id === pieceId)?.groupId)) {
+          return { ...p, lockedBy: null, lockedByName: null, lockedByColor: null };
+        }
+        return p;
+      });
+    }
+
+    function onOpponentPieceMoved(data: any) {
+      if (!data.playerId || data.playerId === myId) return;
+      const { pieceId, x, y, playerId } = data;
+      const pieces = opponentPiecesRef.current[playerId];
+      if (!pieces) return;
+      const target = pieces.find(p => p.id === pieceId);
+      if (!target || target.isPlaced) return;
+
+      opponentPiecesRef.current[playerId] = pieces.map(p => {
+        if (p.groupId && p.groupId === target.groupId) {
+          return {
+            ...p,
+            currentX: x + (p.targetX - target.targetX),
+            currentY: y + (p.targetY - target.targetY),
+          };
+        }
+        if (p.id === pieceId) {
+          return { ...p, currentX: x, currentY: y };
+        }
+        return p;
+      });
+    }
+
+    function onOpponentPiecesSnapped(data: any) {
+      const { anchorPieceId, pieceIds, targetX, targetY, groupId, isPlaced, progressPercent, playerId, pieces: serverPieces } = data;
+      if (!playerId || playerId === myId) return;
+
+      setOpponentProgress(prev => ({ ...prev, [playerId]: progressPercent }));
+
+      const pieces = opponentPiecesRef.current[playerId];
+      if (!pieces) return;
+
+      if (serverPieces && serverPieces.length > 0) {
+        opponentPiecesRef.current[playerId] = pieces.map(p => {
+          const match = serverPieces.find((s: any) => s.id === p.id);
+          if (match) {
+            return {
+              ...p,
+              ...match,
+              lockedBy: null,
+              lockedByName: null,
+              lockedByColor: null,
+            };
+          }
+          return p;
+        });
+        return;
+      }
+
+      const anchor = pieces.find(p => p.id === anchorPieceId) || pieces.find(p => pieceIds.includes(p.id));
+      if (!anchor) return;
+
+      opponentPiecesRef.current[playerId] = pieces.map(p => {
+        if (pieceIds.includes(p.id) || (p.groupId && pieceIds.some((id: any) => pieces.find(item => item.id === id)?.groupId === p.groupId))) {
+          return {
+            ...p,
+            currentX: isPlaced ? p.targetX : targetX + (p.targetX - anchor.targetX),
+            currentY: isPlaced ? p.targetY : targetY + (p.targetY - anchor.targetY),
+            groupId,
+            isPlaced,
+            lockedBy: null,
+            lockedByName: null,
+            lockedByColor: null,
+          };
+        }
+        return p;
+      });
+    }
+
+    function onOpponentSnapRejected(data: any) {
+      if (!data.playerId || data.playerId === myId) return;
+      const { playerId, pieces: updatedPieces } = data;
+      const pieces = opponentPiecesRef.current[playerId];
+      if (!pieces) return;
+      opponentPiecesRef.current[playerId] = pieces.map(p => {
+        const match = updatedPieces.find((u: any) => u.id === p.id);
+        if (match) {
+          return { ...p, ...match };
+        }
+        return p;
+      });
     }
 
     socket.on("cursor_updated", onCursorUpdated);
     socket.on("pieces_snapped", onPiecesSnapped);
+    socket.on("piece_locked", onOpponentPieceLocked);
+    socket.on("piece_unlocked", onOpponentPieceUnlocked);
+    socket.on("piece_moved", onOpponentPieceMoved);
+    socket.on("snap_rejected", onOpponentSnapRejected);
 
     return () => {
       socket.off("cursor_updated", onCursorUpdated);
       socket.off("pieces_snapped", onPiecesSnapped);
+      socket.off("piece_locked", onOpponentPieceLocked);
+      socket.off("piece_unlocked", onOpponentPieceUnlocked);
+      socket.off("piece_moved", onOpponentPieceMoved);
+      socket.off("snap_rejected", onOpponentSnapRejected);
     };
   }, [socket, playSnapSound]);
 
@@ -281,7 +437,7 @@ export default function RoomPage() {
     // Draw pieces
     for (const piece of sortedPieces) {
       const isDraggingThis = piece.id === activePieceId;
-      const isLockedOther = piece.lockedBy && piece.lockedBy !== socket.id;
+      const isLockedOther = piece.lockedBy && piece.lockedBy !== socket?.id;
 
       ctx.save();
       ctx.translate(piece.currentX, piece.currentY);
@@ -300,7 +456,7 @@ export default function RoomPage() {
       ctx.drawImage(img, sx, sy, sw, sh, -tabOverflow, -tabOverflow, pw + tabOverflow * 2, ph + tabOverflow * 2);
       ctx.restore();
 
-      // Draw piece borders & realistic shadows (Sample Images 1 & 2)
+      // Draw piece borders & realistic shadows
       ctx.save();
       ctx.translate(piece.currentX, piece.currentY);
 
@@ -318,14 +474,12 @@ export default function RoomPage() {
         ctx.shadowColor = piece.lockedByColor || C.accentGold;
         ctx.shadowBlur = 8;
       } else if (piece.isPlaced) {
-        // REALISTIC PUZZLE CUT SEAM (Sample Image 2 — NO GREEN HIGHLIGHT)
         ctx.strokeStyle = C.pieceSeam;
         ctx.lineWidth = 1.2;
         ctx.shadowColor = "rgba(0,0,0,0.12)";
         ctx.shadowBlur = 2;
         ctx.shadowOffsetY = 1;
       } else {
-        // NATURAL LOOSE PIECE DROP SHADOW (Sample Image 1)
         ctx.strokeStyle = C.pieceBorder;
         ctx.lineWidth = 1.6;
         ctx.shadowColor = C.shadowColor;
@@ -339,10 +493,10 @@ export default function RoomPage() {
       ctx.restore();
     }
 
-    // Render multiplayer cursors
-    if (room.players) {
+    // Render multiplayer cursors (only in coop, or if we want cursors)
+    if (room.players && room.mode !== 'competitive') {
       for (const [pid, pos] of Object.entries(cursors)) {
-        if (pid === socket.id) continue;
+        if (pid === socket?.id) continue;
         const p = room.players[pid];
         if (!p) continue;
         ctx.save();
@@ -415,7 +569,7 @@ export default function RoomPage() {
     return null;
   }
 
-  // Zoom with scroll wheel (User request: preserve scroll zoom!)
+  // Zoom with scroll wheel
   function handleWheelZoom(e: WheelEvent) {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.92 : 1.08;
@@ -452,7 +606,10 @@ export default function RoomPage() {
       lastPanPos.current = { x: e.clientX, y: e.clientY };
       return;
     }
-    if (piece.lockedBy && piece.lockedBy !== socket.id) return;
+    // Block picking up pieces if not interactive
+    if (!isInteractive) return;
+
+    if (piece.lockedBy && piece.lockedBy !== socket?.id) return;
     isDragging.current = true;
     dragOffset.current = { x: pos.x - piece.currentX, y: pos.y - piece.currentY };
     handleDragStart(piece.id);
@@ -466,7 +623,7 @@ export default function RoomPage() {
       return;
     }
     const pos = getCanvasPos(e);
-    if (room) socket.emit("cursor_move", { roomCode: room.code, x: pos.x, y: pos.y });
+    if (room && socket) socket.emit("cursor_move", { roomCode: room.code, x: pos.x, y: pos.y });
     if (!isDragging.current || activePieceId === null) return;
     const newX = pos.x - dragOffset.current.x;
     const newY = pos.y - dragOffset.current.y;
@@ -486,6 +643,7 @@ export default function RoomPage() {
   function touchDist(t1: React.Touch, t2: React.Touch) {
     return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
   }
+  
   function touchMid(t1: React.Touch, t2: React.Touch, rect: DOMRect) {
     return { x: (t1.clientX + t2.clientX) / 2 - rect.left, y: (t1.clientY + t2.clientY) / 2 - rect.top };
   }
@@ -509,7 +667,7 @@ export default function RoomPage() {
       const wx = (x - offsetRef.current.x) / scaleRef.current;
       const wy = (y - offsetRef.current.y) / scaleRef.current;
       const piece = findPieceAt(wx, wy);
-      if (piece && !(piece.lockedBy && piece.lockedBy !== socket.id)) {
+      if (piece && isInteractive && !(piece.lockedBy && piece.lockedBy !== socket?.id)) {
         isDragging.current = true;
         dragOffset.current = { x: wx - piece.currentX, y: wy - piece.currentY };
         handleDragStart(piece.id);
@@ -613,7 +771,7 @@ export default function RoomPage() {
   };
 
   const playerList = useMemo(() => (room?.players ? Object.values(room.players) : []), [room]);
-  const isHost = room && socket && room.hostId === socket.id;
+  const isHost = player?.isHost;
 
   const handleStartGame = () => {
     if (room && socket) {
@@ -628,6 +786,66 @@ export default function RoomPage() {
       setTimeout(() => setCopiedCode(false), 2000);
     }
   };
+
+  const handleFixPlacedPieces = () => {
+    if (isInteractive) triggerFixPieces();
+  };
+
+  const handleQuitGame = () => {
+    if (!room || !socket) return;
+    const confirmQuit = window.confirm("Are you sure you want to resign from the puzzle race?");
+    if (confirmQuit) {
+      socket.emit("quit_game", { roomCode: room.code });
+    }
+  };
+
+  const leaderboard = useMemo(() => {
+    if (!room) return [];
+    
+    return Object.values(room.players)
+      .filter(p => !p.isSpectator) // exclude spectators
+      .map(p => {
+        const result = room.competitiveResults?.[p.id];
+        const isQuit = room.quitPlayers?.includes(p.id);
+        
+        let placed = 0;
+        let total = room.config?.totalPieces || 0;
+        
+        if (p.id === localPlayerId) {
+          placed = pieces.filter(pPiece => pPiece.isPlaced).length;
+          total = pieces.length || total;
+        } else {
+          const oppPieces = opponentPiecesRef.current[p.id] || [];
+          placed = oppPieces.filter(pPiece => pPiece.isPlaced).length;
+          total = oppPieces.length || total;
+        }
+        
+        const left = total - placed;
+        const pct = total > 0 ? Math.round((placed / total) * 100) : 0;
+        
+        return {
+          player: p,
+          result,
+          isQuit,
+          left,
+          pct,
+        };
+      })
+      .sort((a, b) => {
+        // 1. Finished players first, sorted by place
+        if (a.result && !b.result) return -1;
+        if (!a.result && b.result) return 1;
+        if (a.result && b.result) return a.result.place - b.result.place;
+
+        // 2. Resigned players last
+        if (a.isQuit && !b.isQuit) return 1;
+        if (!a.isQuit && b.isQuit) return -1;
+        if (a.isQuit && b.isQuit) return 0;
+
+        // 3. Active players sorted by remaining pieces (fewer left = higher rank)
+        return a.left - b.left;
+      });
+  }, [room, pieces, opponentProgress, localPlayerId]);
 
   const isLobby = room?.status === "lobby";
 
@@ -689,6 +907,44 @@ export default function RoomPage() {
                 </div>
               </div>
             )}
+
+            {/* Game Mode Selector */}
+            <div className="w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-4 mb-6 text-left">
+              <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF] block mb-2.5">Game Mode</span>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  onClick={() => isHost && socket?.emit('change_mode', { roomCode: room.code, mode: 'cooperative' })}
+                  disabled={!isHost || room.status !== 'lobby'}
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                    room.mode === 'cooperative' || !room.mode
+                      ? 'bg-[#20382E] border-[#34D399] text-white font-bold'
+                      : 'bg-[#0F1720] border-[#26364A] text-[#9CA3AF] hover:bg-[#16222F]/50'
+                  }`}
+                >
+                  <span className="text-xl">🧩</span>
+                  <span className="text-xs font-bold mt-1">Play Together</span>
+                  <span className="text-[10px] opacity-75 mt-0.5">Shared Board</span>
+                </button>
+                <button
+                  onClick={() => isHost && socket?.emit('change_mode', { roomCode: room.code, mode: 'competitive' })}
+                  disabled={!isHost || room.status !== 'lobby'}
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                    room.mode === 'competitive'
+                      ? 'bg-[#4C3B1C] border-[#F59E0B] text-white font-bold'
+                      : 'bg-[#0F1720] border-[#26364A] text-[#9CA3AF] hover:bg-[#16222F]/50'
+                  }`}
+                >
+                  <span className="text-xl">⚔️</span>
+                  <span className="text-xs font-bold mt-1">Competition</span>
+                  <span className="text-[10px] opacity-75 mt-0.5">Individual Race</span>
+                </button>
+              </div>
+              {!isHost && (
+                <p className="text-[10px] text-[#9CA3AF] mt-2 text-center">
+                  * Only the Host can change the game mode.
+                </p>
+              )}
+            </div>
 
             {/* Connected Players List */}
             <div className="w-full mb-8">
@@ -784,6 +1040,16 @@ export default function RoomPage() {
           </div>
         </div>
 
+        {/* Resign / Quit Button for Competitive Mode */}
+        {room?.mode === 'competitive' && room.status === 'playing' && !isSpectator && !isCompletedSelf && !room.quitPlayers?.includes(localPlayerId) && (
+          <button
+            onClick={handleQuitGame}
+            className="rounded-2xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 hover:scale-[1.02] active:scale-[0.98] py-3.5 px-4 text-xs font-bold text-red-400 transition-all shadow-sm w-full mt-1.5"
+          >
+            🏳️ Resign from Race
+          </button>
+        )}
+
         {/* Preview Thumbnail Card */}
         {room?.config?.imageUrl && (
           <div className="flex flex-col gap-2 rounded-2xl border p-3 shadow-sm" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
@@ -807,152 +1073,389 @@ export default function RoomPage() {
       </div>
 
       {/* ──────────────────────────────────────────────────────────
-       * CENTER CANVAS CONTAINER
+       * CENTER CANVAS CONTAINER (Competitive or Cooperative)
        * ────────────────────────────────────────────────────────── */}
-      <div ref={containerRef} className="relative flex-1 h-full overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          className="h-full w-full touch-none cursor-grab active:cursor-grabbing"
-          onMouseDown={onPointerDown}
-          onMouseMove={onPointerMove}
-          onMouseUp={onPointerUp}
-          onMouseLeave={onPointerUp}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          onTouchCancel={onTouchEnd}
-          onContextMenu={(e) => e.preventDefault()}
-        />
+      {room?.mode === 'competitive' ? (
+        <div className="flex-1 flex h-full w-full overflow-hidden">
+          {/* Main player workspace (left side) */}
+          <div ref={containerRef} className="relative flex-1 h-full overflow-hidden border-r border-[#26364A]">
+            <canvas
+              ref={canvasRef}
+              className="h-full w-full touch-none cursor-grab active:cursor-grabbing"
+              onMouseDown={onPointerDown}
+              onMouseMove={onPointerMove}
+              onMouseUp={onPointerUp}
+              onMouseLeave={onPointerUp}
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+              onTouchCancel={onTouchEnd}
+              onContextMenu={(e) => e.preventDefault()}
+            />
 
-        {/* Mobile top action row */}
-        <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between sm:hidden">
-          <button
-            onClick={() => setMobileStatsOpen(true)}
-            className="flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold shadow-md backdrop-blur-md"
-            style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
-          >
-            📊 Details
-          </button>
+            {/* Leaderboard HUD */}
+            <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 rounded-2xl border p-3 shadow-md bg-[#192533]/90 border-[#26364A] backdrop-blur-md w-60">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#8A96AE] flex items-center justify-between">
+                <span>🏆 Leaderboard</span>
+                {room.status === 'playing' && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 text-[9px]">RACE ACTIVE</span>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5 mt-1 max-h-48 overflow-y-auto">
+                {leaderboard.map((item, idx) => (
+                  <div key={item.player.id} className="flex items-center justify-between text-xs py-1 border-b border-white/5 last:border-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono text-[#F59E0B] font-bold w-4 text-right">
+                        {item.result ? `#${item.result.place}` : `${idx + 1}`}
+                      </span>
+                      <span className="truncate max-w-[100px] font-semibold" style={{ color: item.player.color }}>
+                        {item.player.name}
+                        {item.player.id === localPlayerId && " (You)"}
+                      </span>
+                      {item.player.isOffline && <span className="text-[8px] px-1 rounded bg-red-500/20 text-red-400 font-mono">offline</span>}
+                    </div>
+                    <span className="font-mono text-[10px] font-bold text-right shrink-0">
+                      {item.result ? (
+                        <span className="text-amber-400">Done ({item.result.durationSeconds}s)</span>
+                      ) : item.isQuit ? (
+                        <span className="text-red-400">Resigned</span>
+                      ) : (
+                        <span style={{ color: item.player.color }}>Left: {item.left}</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-          <div className="flex items-center gap-2">
+            {/* Spectator HUD notice */}
+            {isSpectator && (
+              <div className="absolute top-16 left-4 z-20 rounded-xl px-3 py-1.5 text-xs font-bold bg-[#16222F]/90 border border-[#26364A] text-[#9CA3AF] shadow-md">
+                👁️ Spectating Game
+              </div>
+            )}
+
+            {/* Locked finished self overlay */}
+            {isCompletedSelf && !isSpectator && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center p-4 bg-[#0F1720]/45 backdrop-blur-xs pointer-events-none">
+                <div className="pointer-events-auto rounded-3xl border border-[#26364A] bg-[#192533]/95 p-6 shadow-2xl text-center max-w-sm">
+                  <div className="text-4xl mb-2">🏆</div>
+                  <h3 className="text-lg font-bold text-[#F3F4F6] mb-1">Board Completed!</h3>
+                  <p className="text-xs text-[#9CA3AF] mb-3">
+                    You finished in <span className="font-semibold text-[#F59E0B]">place #{room.competitiveResults?.[localPlayerId]?.place}</span>!
+                  </p>
+                  <p className="text-[11px] text-[#8A96AE]">
+                    Feel free to pan around your board or watch other players finish in real-time.
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {/* Spectator overlay */}
+            {isSpectator && (
+              <div className="absolute inset-x-0 bottom-16 z-10 flex justify-center p-4 pointer-events-none">
+                <div className="pointer-events-auto rounded-full border border-[#26364A] bg-[#192533]/90 px-4 py-2 shadow-lg text-center text-xs font-bold text-[#9CA3AF]">
+                  👁️ You are spectating this puzzle race.
+                </div>
+              </div>
+            )}
+
+            {/* Mobile top action row */}
+            <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between sm:hidden">
+              <button
+                onClick={() => setMobileStatsOpen(true)}
+                className="flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold shadow-md backdrop-blur-md"
+                style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+              >
+                📊 Details
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleFixPlacedPieces}
+                  className="flex items-center gap-1 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-md transition-transform active:scale-95"
+                  style={{ backgroundColor: C.headerGreen }}
+                >
+                  ✨ Fix Board
+                </button>
+                <button
+                  onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border shadow-md"
+                  style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+                >
+                  {theme === "dark" ? "☀️" : "🌙"}
+                </button>
+              </div>
+            </div>
+
+            {/* TOP CENTER HUD TIMER PILL (Desktop) */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 hidden sm:flex items-center gap-3">
+              <div className="flex items-center gap-3 rounded-full border px-5 py-2 shadow-md backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+                <span className="font-mono text-base font-bold">{formatTime(elapsed)}</span>
+                <div className="h-4 w-px bg-current opacity-20" />
+                <span className="text-xs font-semibold font-mono" style={{ color: C.textMuted }}>{progressPercent}%</span>
+              </div>
+
+              <button
+                onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                className="flex h-10 w-10 items-center justify-center rounded-full border shadow-md transition-transform hover:scale-105"
+                style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+                title="Toggle theme"
+              >
+                {theme === "dark" ? "☀️" : "🌙"}
+              </button>
+            </div>
+
+            {/* RIGHT SIDEBAR ASSISTANT CARD ("Piece Snap & Single Error Fixer") */}
+            <div className="absolute top-4 right-4 z-20 hidden md:flex flex-col gap-3 w-64 rounded-2xl border p-4 shadow-lg backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Piece Snap</span>
+                <button
+                  onClick={() => setAutoSnapEnabled((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoSnapEnabled ? "bg-emerald-600" : "bg-gray-400"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoSnapEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+
+              <p className="text-xs leading-relaxed" style={{ color: C.textMuted }}>
+                Pieces snap automatically when placed close to their target or neighboring pieces.
+              </p>
+
+              <button
+                onClick={handleFixPlacedPieces}
+                className="mt-1 flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-bold text-white shadow-md transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                style={{ backgroundColor: C.headerGreen }}
+                title="Automatically check and snap misaligned or stuck pieces into place"
+              >
+                <span>✨</span> Fix Misaligned Pieces
+              </button>
+            </div>
+
+            {/* BOTTOM FLOATING CONTROL BAR (Reference, Center, Zoom) */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 sm:gap-3 rounded-full border px-3 py-2 sm:px-4 shadow-lg backdrop-blur-md max-w-[94vw] overflow-x-auto" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+              <button
+                onClick={() => setShowRef((v) => !v)}
+                className="flex items-center gap-1 sm:gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                <span>🖼️</span> Ref
+              </button>
+
+              <button
+                onClick={handleCenterView}
+                className="flex items-center gap-1 sm:gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                <span>🎯</span> Center
+              </button>
+
+              <div className="h-4 w-px bg-current opacity-20" />
+
+              {/* Zoom controls */}
+              <div className="flex items-center gap-1.5 sm:gap-2 font-mono text-xs font-bold">
+                <button
+                  onClick={() => handleZoomChange(-0.15)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                  style={{ borderColor: C.cardBorder }}
+                >
+                  −
+                </button>
+                <span className="w-9 sm:w-10 text-center">{zoomPercent}%</span>
+                <button
+                  onClick={() => handleZoomChange(0.15)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                  style={{ borderColor: C.cardBorder }}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Reference Image Modal */}
+            {showRef && room?.config?.imageUrl && (
+              <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-2xl border p-3 shadow-2xl backdrop-blur-md max-w-[90vw]" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+                <div className="flex items-center justify-between pb-2 border-b mb-2" style={{ borderColor: C.cardBorder }}>
+                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Reference Image</span>
+                  <button onClick={() => setShowRef(false)} className="text-xs font-bold px-2 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/5">✕</button>
+                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={room.config.imageUrl} alt="Reference" className="max-h-60 max-w-xs sm:max-w-sm rounded-xl object-contain" />
+              </div>
+            )}
+          </div>
+
+          {/* Opponents column (right side) */}
+          {Object.keys(opponentPiecesRef.current).length > 0 ? (
+            <div className="w-64 sm:w-72 md:w-80 flex flex-col gap-4 overflow-y-auto p-4 bg-[#16222F]/40 border-l border-[#26364A] shrink-0">
+              <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: C.cardBorder }}>
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-[#8A96AE]">Opponent Feeds</h3>
+                <span className="text-[10px] font-mono text-[#8A96AE]">{Object.keys(opponentPiecesRef.current).length} active</span>
+              </div>
+              <div className="flex flex-col gap-4">
+                {Object.keys(opponentPiecesRef.current).map(pid => {
+                  const p = room.players[pid];
+                  if (!p || p.isSpectator) return null;
+                  return (
+                    <OpponentMiniBoard
+                      key={pid}
+                      playerId={pid}
+                      opponentPiecesRef={opponentPiecesRef}
+                      player={p}
+                      config={room.config}
+                      image={imgRef.current}
+                      themeColors={C}
+                      result={room.competitiveResults?.[pid]}
+                      isQuit={room.quitPlayers?.includes(pid)}
+                      pct={opponentProgress[pid] || 0}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="w-64 sm:w-72 md:w-80 flex flex-col items-center justify-center p-6 bg-[#16222F]/20 border-l border-[#26364A] shrink-0 text-center text-xs text-[#9CA3AF] italic">
+              No active opponents in race
+            </div>
+          )}
+        </div>
+      ) : (
+        <div ref={containerRef} className="relative flex-1 h-full overflow-hidden">
+          <canvas
+            ref={canvasRef}
+            className="h-full w-full touch-none cursor-grab active:cursor-grabbing"
+            onMouseDown={onPointerDown}
+            onMouseMove={onPointerMove}
+            onMouseUp={onPointerUp}
+            onMouseLeave={onPointerUp}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            onTouchCancel={onTouchEnd}
+            onContextMenu={(e) => e.preventDefault()}
+          />
+
+          {/* Mobile top action row */}
+          <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between sm:hidden">
             <button
-              onClick={handleFixPlacedPieces}
-              className="flex items-center gap-1 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-md transition-transform active:scale-95"
-              style={{ backgroundColor: C.headerGreen }}
+              onClick={() => setMobileStatsOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold shadow-md backdrop-blur-md"
+              style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
             >
-              ✨ Fix Board
+              📊 Details
             </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleFixPlacedPieces}
+                className="flex items-center gap-1 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-md transition-transform active:scale-95"
+                style={{ backgroundColor: C.headerGreen }}
+              >
+                ✨ Fix Board
+              </button>
+              <button
+                onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                className="flex h-9 w-9 items-center justify-center rounded-full border shadow-md"
+                style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+              >
+                {theme === "dark" ? "☀️" : "🌙"}
+              </button>
+            </div>
+          </div>
+
+          {/* TOP CENTER HUD TIMER PILL (Desktop) */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 hidden sm:flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-full border px-5 py-2 shadow-md backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+              <span className="font-mono text-base font-bold">{formatTime(elapsed)}</span>
+              <div className="h-4 w-px bg-current opacity-20" />
+              <span className="text-xs font-semibold font-mono" style={{ color: C.textMuted }}>{progressPercent}%</span>
+            </div>
+
             <button
               onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-              className="flex h-9 w-9 items-center justify-center rounded-full border shadow-md"
+              className="flex h-10 w-10 items-center justify-center rounded-full border shadow-md transition-transform hover:scale-105"
               style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+              title="Toggle theme"
             >
               {theme === "dark" ? "☀️" : "🌙"}
             </button>
           </div>
-        </div>
 
-        {/* ──────────────────────────────────────────────────────────
-         * TOP CENTER HUD TIMER PILL (Desktop)
-         * ────────────────────────────────────────────────────────── */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 hidden sm:flex items-center gap-3">
-          <div className="flex items-center gap-3 rounded-full border px-5 py-2 shadow-md backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
-            <span className="font-mono text-base font-bold">{formatTime(elapsed)}</span>
-            <div className="h-4 w-px bg-current opacity-20" />
-            <span className="text-xs font-semibold font-mono" style={{ color: C.textMuted }}>{progressPercent}%</span>
-          </div>
-
-          <button
-            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-            className="flex h-10 w-10 items-center justify-center rounded-full border shadow-md transition-transform hover:scale-105"
-            style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
-            title="Toggle theme"
-          >
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
-        </div>
-
-        {/* ──────────────────────────────────────────────────────────
-         * RIGHT SIDEBAR ASSISTANT CARD ("Piece Snap & Single Error Fixer")
-         * ────────────────────────────────────────────────────────── */}
-        <div className="absolute top-4 right-4 z-20 hidden md:flex flex-col gap-3 w-64 rounded-2xl border p-4 shadow-lg backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Piece Snap</span>
-            <button
-              onClick={() => setAutoSnapEnabled((v) => !v)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoSnapEnabled ? "bg-emerald-600" : "bg-gray-400"}`}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoSnapEnabled ? "translate-x-6" : "translate-x-1"}`} />
-            </button>
-          </div>
-
-          <p className="text-xs leading-relaxed" style={{ color: C.textMuted }}>
-            Pieces snap automatically when placed close to their target or neighboring pieces.
-          </p>
-
-          {/* SINGLE Auto-Align & Error Fixer Button */}
-          <button
-            onClick={handleFixPlacedPieces}
-            className="mt-1 flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-bold text-white shadow-md transition-transform hover:scale-[1.02] active:scale-[0.98]"
-            style={{ backgroundColor: C.headerGreen }}
-            title="Automatically check and snap misaligned or stuck pieces into place"
-          >
-            <span>✨</span> Fix Misaligned Pieces
-          </button>
-        </div>
-
-        {/* ──────────────────────────────────────────────────────────
-         * BOTTOM FLOATING CONTROL BAR (Reference, Center, Zoom)
-         * ────────────────────────────────────────────────────────── */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 sm:gap-3 rounded-full border px-3 py-2 sm:px-4 shadow-lg backdrop-blur-md max-w-[94vw] overflow-x-auto" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
-          <button
-            onClick={() => setShowRef((v) => !v)}
-            className="flex items-center gap-1 sm:gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-          >
-            <span>🖼️</span> Ref
-          </button>
-
-          <button
-            onClick={handleCenterView}
-            className="flex items-center gap-1 sm:gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-          >
-            <span>🎯</span> Center
-          </button>
-
-          <div className="h-4 w-px bg-current opacity-20" />
-
-          {/* Zoom controls */}
-          <div className="flex items-center gap-1.5 sm:gap-2 font-mono text-xs font-bold">
-            <button
-              onClick={() => handleZoomChange(-0.15)}
-              className="flex h-7 w-7 items-center justify-center rounded-full border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-              style={{ borderColor: C.cardBorder }}
-            >
-              −
-            </button>
-            <span className="w-9 sm:w-10 text-center">{zoomPercent}%</span>
-            <button
-              onClick={() => handleZoomChange(0.15)}
-              className="flex h-7 w-7 items-center justify-center rounded-full border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-              style={{ borderColor: C.cardBorder }}
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        {/* Reference Image Modal */}
-        {showRef && room?.config?.imageUrl && (
-          <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-2xl border p-3 shadow-2xl backdrop-blur-md max-w-[90vw]" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
-            <div className="flex items-center justify-between pb-2 border-b mb-2" style={{ borderColor: C.cardBorder }}>
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Reference Image</span>
-              <button onClick={() => setShowRef(false)} className="text-xs font-bold px-2 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/5">✕</button>
+          {/* RIGHT SIDEBAR ASSISTANT CARD ("Piece Snap & Single Error Fixer") */}
+          <div className="absolute top-4 right-4 z-20 hidden md:flex flex-col gap-3 w-64 rounded-2xl border p-4 shadow-lg backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Piece Snap</span>
+              <button
+                onClick={() => setAutoSnapEnabled((v) => !v)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoSnapEnabled ? "bg-emerald-600" : "bg-gray-400"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoSnapEnabled ? "translate-x-6" : "translate-x-1"}`} />
+              </button>
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={room.config.imageUrl} alt="Reference" className="max-h-60 max-w-xs sm:max-w-sm rounded-xl object-contain" />
+
+            <p className="text-xs leading-relaxed" style={{ color: C.textMuted }}>
+              Pieces snap automatically when placed close to their target or neighboring pieces.
+            </p>
+
+            <button
+              onClick={handleFixPlacedPieces}
+              className="mt-1 flex items-center justify-center gap-2 rounded-xl py-3 px-4 text-xs font-bold text-white shadow-md transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{ backgroundColor: C.headerGreen }}
+              title="Automatically check and snap misaligned or stuck pieces into place"
+            >
+              <span>✨</span> Fix Misaligned Pieces
+            </button>
           </div>
-        )}
-      </div>
+
+          {/* BOTTOM FLOATING CONTROL BAR (Reference, Center, Zoom) */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 sm:gap-3 rounded-full border px-3 py-2 sm:px-4 shadow-lg backdrop-blur-md max-w-[94vw] overflow-x-auto" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+            <button
+              onClick={() => setShowRef((v) => !v)}
+              className="flex items-center gap-1 sm:gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+            >
+              <span>🖼️</span> Ref
+            </button>
+
+            <button
+              onClick={handleCenterView}
+              className="flex items-center gap-1 sm:gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+            >
+              <span>🎯</span> Center
+            </button>
+
+            <div className="h-4 w-px bg-current opacity-20" />
+
+            {/* Zoom controls */}
+            <div className="flex items-center gap-1.5 sm:gap-2 font-mono text-xs font-bold">
+              <button
+                onClick={() => handleZoomChange(-0.15)}
+                className="flex h-7 w-7 items-center justify-center rounded-full border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                style={{ borderColor: C.cardBorder }}
+              >
+                −
+              </button>
+              <span className="w-9 sm:w-10 text-center">{zoomPercent}%</span>
+              <button
+                onClick={() => handleZoomChange(0.15)}
+                className="flex h-7 w-7 items-center justify-center rounded-full border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                style={{ borderColor: C.cardBorder }}
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* Reference Image Modal */}
+          {showRef && room?.config?.imageUrl && (
+            <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-2xl border p-3 shadow-2xl backdrop-blur-md max-w-[90vw]" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+              <div className="flex items-center justify-between pb-2 border-b mb-2" style={{ borderColor: C.cardBorder }}>
+                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Reference Image</span>
+                <button onClick={() => setShowRef(false)} className="text-xs font-bold px-2 py-0.5 rounded hover:bg-black/5 dark:hover:bg-white/5">✕</button>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={room.config.imageUrl} alt="Reference" className="max-h-60 max-w-xs sm:max-w-sm rounded-xl object-contain" />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Completion Modal */}
       {isCompleted && (
@@ -960,15 +1463,228 @@ export default function RoomPage() {
           <div className="flex flex-col items-center text-center rounded-3xl border p-8 shadow-2xl max-w-md w-full animate-in fade-in zoom-in-95 duration-300" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
             <div className="text-5xl mb-3">🎉</div>
             <h2 className="text-2xl font-bold tracking-tight mb-1" style={{ color: C.textPrimary }}>Puzzle Completed!</h2>
-            <p className="text-sm mb-6" style={{ color: C.textMuted }}>
-              Congratulations! You completed the puzzle in <span className="font-semibold font-mono">{completionData ? formatTime(completionData.durationSeconds) : formatTime(elapsed)}</span>.
-            </p>
+            {room?.mode === 'competitive' ? (
+              <div className="w-full flex flex-col gap-2 mb-6 text-left mt-3">
+                <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF] block border-b pb-1.5 mb-1" style={{ borderColor: C.cardBorder }}>Final Results</span>
+                {leaderboard.map((item, idx) => (
+                  <div key={item.player.id} className="flex items-center justify-between text-xs py-1.5 border-b border-white/5 last:border-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#F59E0B] font-extrabold w-5 text-right font-mono">
+                        {item.result ? `#${item.result.place}` : `${idx + 1}`}
+                      </span>
+                      <span className="font-bold text-[#F3F4F6] truncate max-w-[140px]" style={{ color: item.player.color }}>
+                        {item.player.name}
+                        {item.player.id === localPlayerId && " (You)"}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold">
+                      {item.result ? (
+                        <span className="text-amber-400 font-bold">{item.result.durationSeconds}s</span>
+                      ) : item.isQuit ? (
+                        <span className="text-red-400">Resigned</span>
+                      ) : (
+                        <span className="text-gray-400">Unfinished</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm mb-6" style={{ color: C.textMuted }}>
+                Congratulations! You completed the puzzle in <span className="font-semibold font-mono">{completionData ? formatTime(completionData.durationSeconds) : formatTime(elapsed)}</span>.
+              </p>
+            )}
             <div className="flex gap-3 w-full">
               <Link href="/" className="flex-1 rounded-xl py-3.5 text-sm font-bold text-center text-white shadow-md transition-transform hover:scale-105" style={{ backgroundColor: C.headerGreen }}>
                 Return Home
               </Link>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+ * OPPONENT MINI-BOARD CANVAS RENDER COMPONENT
+ * ────────────────────────────────────────────────────────── */
+interface OpponentMiniBoardProps {
+  playerId: string;
+  opponentPiecesRef: React.MutableRefObject<Record<string, PuzzlePieceData[]>>;
+  player: Player;
+  config: any;
+  image: HTMLImageElement | null;
+  themeColors: any;
+  result?: { finishedAt: number; durationSeconds: number; place: number };
+  isQuit?: boolean;
+  pct: number;
+}
+
+function OpponentMiniBoard({
+  playerId,
+  opponentPiecesRef,
+  player,
+  config,
+  image,
+  themeColors,
+  result,
+  isQuit,
+  pct,
+}: OpponentMiniBoardProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let animId: number;
+    function tick() {
+      const canvas = canvasRef.current;
+      if (!canvas || !config || !image) {
+        animId = requestAnimationFrame(tick);
+        return;
+      }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        animId = requestAnimationFrame(tick);
+        return;
+      }
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+      }
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const margin = 80;
+      const fitWidth = config.boardWidth + margin * 2;
+      const fitHeight = config.boardHeight + margin * 2;
+      const scale = Math.min(rect.width / fitWidth, rect.height / fitHeight);
+
+      const offsetX = (rect.width - config.boardWidth * scale) / 2;
+      const offsetY = (rect.height - config.boardHeight * scale) / 2;
+
+      ctx.setTransform(scale * dpr, 0, 0, scale * dpr, offsetX * dpr, offsetY * dpr);
+
+      // Wooden Trim board background
+      ctx.save();
+      ctx.fillStyle = themeColors.boardBorder;
+      ctx.beginPath();
+      ctx.roundRect(-20, -20, config.boardWidth + 40, config.boardHeight + 40, 16);
+      ctx.fill();
+
+      ctx.fillStyle = themeColors.boardBg;
+      ctx.beginPath();
+      ctx.roundRect(-10, -10, config.boardWidth + 20, config.boardHeight + 20, 12);
+      ctx.fill();
+      ctx.restore();
+
+      // Board outline
+      ctx.save();
+      ctx.strokeStyle = themeColors.boardOutline;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, config.boardWidth, config.boardHeight);
+      ctx.restore();
+
+      // Draw opponent board grid
+      const pw = config.boardWidth / config.cols;
+      const ph = config.boardHeight / config.rows;
+      ctx.save();
+      ctx.strokeStyle = themeColors.grid;
+      ctx.lineWidth = 1;
+      for (let r = 1; r < config.rows; r++) {
+        ctx.beginPath();
+        ctx.moveTo(0, r * ph);
+        ctx.lineTo(config.boardWidth, r * ph);
+        ctx.stroke();
+      }
+      for (let c = 1; c < config.cols; c++) {
+        ctx.beginPath();
+        ctx.moveTo(c * pw, 0);
+        ctx.lineTo(c * pw, config.boardHeight);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Draw pieces
+      const pieces = opponentPiecesRef.current[playerId] || [];
+      if (pieces.length > 0) {
+        const tabOverflow = Math.max(pw, ph) * 0.26;
+        const srcPw = image.naturalWidth / config.cols;
+        const srcPh = image.naturalHeight / config.rows;
+        const srcOverflowX = tabOverflow * (image.naturalWidth / config.boardWidth);
+        const srcOverflowY = tabOverflow * (image.naturalHeight / config.boardHeight);
+
+        // Sort: placed pieces first
+        const sorted = [...pieces].sort((a, b) => (a.isPlaced === b.isPlaced ? 0 : a.isPlaced ? -1 : 1));
+
+        for (const piece of sorted) {
+          ctx.save();
+          ctx.translate(piece.currentX, piece.currentY);
+          drawPiecePath(ctx, piece, pw, ph);
+          ctx.clip();
+          const sx = piece.gridX * srcPw - srcOverflowX;
+          const sy = piece.gridY * srcPh - srcOverflowY;
+          const sw = srcPw + srcOverflowX * 2;
+          const sh = srcPh + srcOverflowY * 2;
+          ctx.drawImage(image, sx, sy, sw, sh, -tabOverflow, -tabOverflow, pw + tabOverflow * 2, ph + tabOverflow * 2);
+          ctx.restore();
+
+          // Border seam
+          ctx.save();
+          ctx.translate(piece.currentX, piece.currentY);
+          ctx.strokeStyle = piece.isPlaced ? themeColors.pieceSeam : themeColors.pieceBorder;
+          ctx.lineWidth = piece.isPlaced ? 1.0 : 1.4;
+          drawPiecePath(ctx, piece, pw, ph);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      animId = requestAnimationFrame(tick);
+    }
+
+    tick();
+    return () => cancelAnimationFrame(animId);
+  }, [playerId, opponentPiecesRef, config, image, themeColors]);
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border p-3 bg-[#192533] border-[#26364A] shadow-md relative overflow-hidden transition-all duration-300">
+      {/* Header */}
+      <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold" style={{ backgroundColor: player.color + "40", border: `1px solid ${player.color}`, color: player.color }}>
+            {player.avatar}
+          </div>
+          <span className="font-bold text-[#F3F4F6] truncate max-w-[120px]">{player.name}</span>
+          {player.isOffline && <span className="text-[10px] text-red-400 animate-pulse font-mono">OFFLINE</span>}
+        </div>
+        <div className="flex items-center gap-1.5 font-bold">
+          {result ? (
+            <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px] border border-amber-500/30">
+              🏆 #{result.place} ({result.durationSeconds}s)
+            </span>
+          ) : isQuit ? (
+            <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px] border border-red-500/30">
+              🏳️ Resigned
+            </span>
+          ) : (
+            <span className="font-mono text-[#F59E0B]">{pct}%</span>
+          )}
+        </div>
+      </div>
+
+      {/* Mini canvas */}
+      <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#0F1720] border border-[#26364A]">
+        <canvas ref={canvasRef} className="w-full h-full" />
+      </div>
+
+      {/* Progress bar */}
+      {!result && !isQuit && (
+        <div className="h-1.5 w-full bg-[#0F1720] rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: player.color }} />
         </div>
       )}
     </div>

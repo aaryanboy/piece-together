@@ -26,14 +26,20 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
   socket.on('lock_piece', ({ roomCode, pieceId }) => {
     const code = roomCode.toUpperCase();
     const room = roomStore.getRoom(code);
-    if (!room || !room.pieces) return;
+    if (!room) return;
 
-    const piece = room.pieces.find((p) => p.id === pieceId);
-    const player = room.players[socket.id];
-    if (!piece || !player) return;
+    // Find player by transient socket.id
+    const player = Object.values(room.players).find((p) => p.socketId === socket.id);
+    if (!player || player.isSpectator) return;
 
-    // Already-placed pieces are permanently locked into position — never let
-    // anything (including a stale/buggy client) re-grab one over the socket.
+    const isCompetitive = room.mode === 'competitive';
+    const pieces = isCompetitive ? room.playerPieces?.[player.id] : room.pieces;
+    if (!pieces) return;
+
+    const piece = pieces.find((p) => p.id === pieceId);
+    if (!piece) return;
+
+    // Already-placed pieces are permanently locked into position
     if (piece.isPlaced) return;
 
     // Spatial lock check
@@ -47,7 +53,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
 
     // Lock all pieces in the same group
     if (piece.groupId) {
-      for (const p of room.pieces) {
+      for (const p of pieces) {
         if (p.groupId === piece.groupId) {
           p.lockedBy = socket.id;
           p.lockedByName = player.name;
@@ -61,6 +67,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
       lockedBy: socket.id,
       lockedByName: player.name,
       lockedByColor: player.color,
+      playerId: player.id,
     });
   });
 
@@ -68,9 +75,16 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
   socket.on('unlock_piece', ({ roomCode, pieceId }) => {
     const code = roomCode.toUpperCase();
     const room = roomStore.getRoom(code);
-    if (!room || !room.pieces) return;
+    if (!room) return;
 
-    const piece = room.pieces.find((p) => p.id === pieceId);
+    const player = Object.values(room.players).find((p) => p.socketId === socket.id);
+    if (!player || player.isSpectator) return;
+
+    const isCompetitive = room.mode === 'competitive';
+    const pieces = isCompetitive ? room.playerPieces?.[player.id] : room.pieces;
+    if (!pieces) return;
+
+    const piece = pieces.find((p) => p.id === pieceId);
     if (!piece) return;
 
     if (piece.lockedBy === socket.id) {
@@ -79,7 +93,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
       piece.lockedByColor = null;
 
       if (piece.groupId) {
-        for (const p of room.pieces) {
+        for (const p of pieces) {
           if (p.groupId === piece.groupId) {
             p.lockedBy = null;
             p.lockedByName = null;
@@ -88,7 +102,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
         }
       }
 
-      socket.to(code).emit('piece_unlocked', { pieceId });
+      socket.to(code).emit('piece_unlocked', { pieceId, playerId: player.id });
       scheduleDbSave(code);
     }
   });
@@ -97,18 +111,24 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
   socket.on('move_piece', ({ roomCode, pieceId, x, y }) => {
     const code = roomCode.toUpperCase();
     const room = roomStore.getRoom(code);
-    if (!room || !room.pieces) return;
+    if (!room) return;
 
-    const piece = room.pieces.find((p) => p.id === pieceId);
+    const player = Object.values(room.players).find((p) => p.socketId === socket.id);
+    if (!player || player.isSpectator) return;
+
+    const isCompetitive = room.mode === 'competitive';
+    const pieces = isCompetitive ? room.playerPieces?.[player.id] : room.pieces;
+    if (!pieces) return;
+
+    const piece = pieces.find((p) => p.id === pieceId);
     if (!piece) return;
 
-    // Placed pieces don't move — guards against a stale drag event arriving
-    // after a piece has already locked into the board.
+    // Placed pieces don't move
     if (piece.isPlaced) return;
 
     // Move piece and all pieces in its connected group using exact relative target math
     if (piece.groupId) {
-      for (const p of room.pieces) {
+      for (const p of pieces) {
         if (p.groupId === piece.groupId) {
           p.currentX = x + (p.targetX - piece.targetX);
           p.currentY = y + (p.targetY - piece.targetY);
@@ -119,16 +139,23 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
       piece.currentY = y;
     }
 
-    socket.to(code).emit('piece_moved', { pieceId, x, y });
+    socket.to(code).emit('piece_moved', { pieceId, x, y, playerId: player.id });
   });
 
   // SNAP PIECES (When pieces lock onto the board target or merge groups)
   socket.on('snap_pieces', ({ roomCode, anchorPieceId, pieceIds, targetX, targetY, groupId, isPlaced, neighborPieceId }) => {
     const code = roomCode.toUpperCase();
     const room = roomStore.getRoom(code);
-    if (!room || !room.pieces || !room.config) return;
+    if (!room || !room.config) return;
 
-    const targetPieces = room.pieces.filter((p) => pieceIds.includes(p.id));
+    const player = Object.values(room.players).find((p) => p.socketId === socket.id);
+    if (!player || player.isSpectator) return;
+
+    const isCompetitive = room.mode === 'competitive';
+    const pieces = isCompetitive ? room.playerPieces?.[player.id] : room.pieces;
+    if (!pieces) return;
+
+    const targetPieces = pieces.filter((p) => pieceIds.includes(p.id));
     if (targetPieces.length === 0) return;
 
     // Refuse to move pieces that are already locked into the board.
@@ -144,7 +171,6 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
 
     if (isPlaced) {
       // Board placement — every piece in the group must land within tolerance
-      // of ITS OWN correct target.
       const allCorrect = targetPieces.every((p) => {
         const newX = p.currentX + deltaX;
         const newY = p.currentY + deltaY;
@@ -158,17 +184,18 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
           p.lockedByName = null;
           p.lockedByColor = null;
         }
-        socket.to(code).emit('piece_unlocked', { pieceId: anchor.id });
+        socket.to(code).emit('piece_unlocked', { pieceId: anchor.id, playerId: player.id });
         socket.emit('snap_rejected', {
           pieceIds,
           reason: 'not-correct-spot',
-          pieces: targetPieces
+          pieces: targetPieces,
+          playerId: player.id,
         });
         scheduleDbSave(code);
         return;
       }
 
-      // Snap exactly onto each piece's true target — not the (possibly slightly-off) point client dropped it at.
+      // Snap exactly onto each piece's true target
       for (const p of targetPieces) {
         p.currentX = p.targetX;
         p.currentY = p.targetY;
@@ -181,7 +208,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
     } else {
       // Group-merge — two loose pieces snapping together off the board.
       if (neighborPieceId) {
-        const neighbor = room.pieces.find((p) => p.id === neighborPieceId);
+        const neighbor = pieces.find((p) => p.id === neighborPieceId);
         if (neighbor) {
           const isNeighbor =
             (Math.abs(neighbor.gridX - anchor.gridX) === 1 && neighbor.gridY === anchor.gridY) ||
@@ -193,11 +220,12 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
               p.lockedByName = null;
               p.lockedByColor = null;
             }
-            socket.to(code).emit('piece_unlocked', { pieceId: anchor.id });
+            socket.to(code).emit('piece_unlocked', { pieceId: anchor.id, playerId: player.id });
             socket.emit('snap_rejected', {
               pieceIds,
               reason: 'not-neighbors',
-              pieces: targetPieces
+              pieces: targetPieces,
+              playerId: player.id,
             });
             scheduleDbSave(code);
             return;
@@ -217,11 +245,11 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
     }
 
     // Collect all updated pieces in the group
-    const updatedPieces = room.pieces.filter((p) => pieceIds.includes(p.id) || p.groupId === groupId);
+    const updatedPieces = pieces.filter((p) => pieceIds.includes(p.id) || p.groupId === groupId);
 
     // Check overall puzzle completion percentage
-    const placedCount = room.pieces.filter((p) => p.isPlaced).length;
-    const totalCount = room.pieces.length;
+    const placedCount = pieces.filter((p) => p.isPlaced).length;
+    const totalCount = pieces.length;
     const progressPercent = Math.round((placedCount / totalCount) * 100);
 
     io.to(code).emit('pieces_snapped', {
@@ -232,22 +260,73 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
       groupId,
       isPlaced,
       progressPercent,
+      playerId: player.id,
       pieces: updatedPieces,
     });
 
-    // Check for 100% completion!
-    if (placedCount === totalCount && room.status !== 'completed') {
-      room.status = 'completed';
-      room.completedAt = Date.now();
-      const durationSeconds = room.startedAt ? Math.round((room.completedAt - room.startedAt) / 1000) : 0;
-      room.elapsedSeconds = durationSeconds;
+    // Check for completion
+    if (placedCount === totalCount) {
+      if (isCompetitive) {
+        // NOTE: Keep this check-and-write logic fully synchronous to prevent race conditions.
+        // DO NOT introduce an await between reading room.competitiveResults count and writing the result.
+        if (room.competitiveResults && !room.competitiveResults[player.id]) {
+          const place = Object.keys(room.competitiveResults).length + 1;
+          const durationSeconds = room.startedAt ? Math.round((Date.now() - room.startedAt) / 1000) : 0;
+          
+          room.competitiveResults[player.id] = {
+            finishedAt: Date.now(),
+            durationSeconds,
+            place,
+          };
 
-      io.to(code).emit('game_completed', {
-        completedAt: room.completedAt,
-        durationSeconds,
-      });
+          // Send system chat announcement
+          const systemMessage = {
+            id: `sys-${Date.now()}`,
+            senderId: 'system',
+            senderName: 'System',
+            senderColor: '#888',
+            text: `🏆 ${player.name} finished in place #${place}! (Time: ${durationSeconds}s)`,
+            timestamp: Date.now(),
+            system: true,
+          };
+          room.chat.push(systemMessage);
+          io.to(code).emit('chat_message', systemMessage);
 
-      dbStore.saveRoom(room);
+          // Check if all non-spectators have completed or quit
+          const activePlayers = Object.values(room.players).filter((p) => !p.isSpectator);
+          const allDone = activePlayers.length > 0 && activePlayers.every(
+            (p) => (room.competitiveResults?.[p.id] || room.quitPlayers?.includes(p.id))
+          );
+
+          if (allDone && room.status !== 'completed') {
+            room.status = 'completed';
+            room.completedAt = Date.now();
+            io.to(code).emit('game_completed', {
+              completedAt: room.completedAt,
+              durationSeconds,
+            });
+          }
+
+          dbStore.saveRoom(room);
+          io.to(code).emit('room_updated', room);
+        }
+      } else {
+        // Cooperative mode completion
+        if (room.status !== 'completed') {
+          room.status = 'completed';
+          room.completedAt = Date.now();
+          const durationSeconds = room.startedAt ? Math.round((room.completedAt - room.startedAt) / 1000) : 0;
+          room.elapsedSeconds = durationSeconds;
+
+          io.to(code).emit('game_completed', {
+            completedAt: room.completedAt,
+            durationSeconds,
+          });
+
+          dbStore.saveRoom(room);
+          io.to(code).emit('room_updated', room);
+        }
+      }
     } else {
       scheduleDbSave(code);
     }
@@ -257,7 +336,14 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
   socket.on('fix_placed_pieces', ({ roomCode }) => {
     const code = roomCode.toUpperCase();
     const room = roomStore.getRoom(code);
-    if (!room || !room.pieces || !room.config) return;
+    if (!room || !room.config) return;
+
+    const player = Object.values(room.players).find((p) => p.socketId === socket.id);
+    if (!player || player.isSpectator) return;
+
+    const isCompetitive = room.mode === 'competitive';
+    const pieces = isCompetitive ? room.playerPieces?.[player.id] : room.pieces;
+    if (!pieces) return;
 
     const pieceWidth = room.config.boardWidth / room.config.cols;
     const pieceHeight = room.config.boardHeight / room.config.rows;
@@ -265,7 +351,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
 
     const fixedPieces: any[] = [];
 
-    for (const p of room.pieces) {
+    for (const p of pieces) {
       const distToTarget = Math.hypot(p.currentX - p.targetX, p.currentY - p.targetY);
       if (p.isPlaced || p.lockedBy !== null || distToTarget <= snapTolerance) {
         p.currentX = p.targetX;
@@ -280,8 +366,8 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
 
     if (fixedPieces.length === 0) return;
 
-    const placedCount = room.pieces.filter((p) => p.isPlaced).length;
-    const totalCount = room.pieces.length;
+    const placedCount = pieces.filter((p) => p.isPlaced).length;
+    const totalCount = pieces.length;
     const progressPercent = Math.round((placedCount / totalCount) * 100);
 
     const firstFixed = fixedPieces[0];
@@ -291,24 +377,75 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
       pieceIds: fixedPieces.map((p) => p.id),
       targetX: firstFixed.targetX,
       targetY: firstFixed.targetY,
-      groupId: firstFixed.groupId || firstFixed.id,
+      groupId: fixedPieces[0].groupId || firstFixed.id,
       isPlaced: true,
       progressPercent,
+      playerId: player.id,
       pieces: fixedPieces,
     });
 
-    if (placedCount === totalCount && room.status !== 'completed') {
-      room.status = 'completed';
-      room.completedAt = Date.now();
-      const durationSeconds = room.startedAt ? Math.round((room.completedAt - room.startedAt) / 1000) : 0;
-      room.elapsedSeconds = durationSeconds;
+    if (placedCount === totalCount) {
+      if (isCompetitive) {
+        // NOTE: Keep this check-and-write logic fully synchronous to prevent race conditions.
+        // DO NOT introduce an await between reading room.competitiveResults count and writing the result.
+        if (room.competitiveResults && !room.competitiveResults[player.id]) {
+          const place = Object.keys(room.competitiveResults).length + 1;
+          const durationSeconds = room.startedAt ? Math.round((Date.now() - room.startedAt) / 1000) : 0;
+          
+          room.competitiveResults[player.id] = {
+            finishedAt: Date.now(),
+            durationSeconds,
+            place,
+          };
 
-      io.to(code).emit('game_completed', {
-        completedAt: room.completedAt,
-        durationSeconds,
-      });
+          // Send system chat announcement
+          const systemMessage = {
+            id: `sys-${Date.now()}`,
+            senderId: 'system',
+            senderName: 'System',
+            senderColor: '#888',
+            text: `🏆 ${player.name} finished in place #${place}! (Time: ${durationSeconds}s)`,
+            timestamp: Date.now(),
+            system: true,
+          };
+          room.chat.push(systemMessage);
+          io.to(code).emit('chat_message', systemMessage);
 
-      dbStore.saveRoom(room);
+          // Check if all non-spectators have completed or quit
+          const activePlayers = Object.values(room.players).filter((p) => !p.isSpectator);
+          const allDone = activePlayers.length > 0 && activePlayers.every(
+            (p) => (room.competitiveResults?.[p.id] || room.quitPlayers?.includes(p.id))
+          );
+
+          if (allDone && room.status !== 'completed') {
+            room.status = 'completed';
+            room.completedAt = Date.now();
+            io.to(code).emit('game_completed', {
+              completedAt: room.completedAt,
+              durationSeconds,
+            });
+          }
+
+          dbStore.saveRoom(room);
+          io.to(code).emit('room_updated', room);
+        }
+      } else {
+        // Cooperative mode completion
+        if (room.status !== 'completed') {
+          room.status = 'completed';
+          room.completedAt = Date.now();
+          const durationSeconds = room.startedAt ? Math.round((room.completedAt - room.startedAt) / 1000) : 0;
+          room.elapsedSeconds = durationSeconds;
+
+          io.to(code).emit('game_completed', {
+            completedAt: room.completedAt,
+            durationSeconds,
+          });
+
+          dbStore.saveRoom(room);
+          io.to(code).emit('room_updated', room);
+        }
+      }
     } else {
       scheduleDbSave(code);
     }
@@ -318,9 +455,12 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
   socket.on('cursor_move', ({ roomCode, x, y }) => {
     const code = roomCode.toUpperCase();
     const room = roomStore.getRoom(code);
-    if (room && room.players[socket.id]) {
-      room.players[socket.id].cursor = { x, y };
-      socket.to(code).emit('cursor_updated', { playerId: socket.id, x, y });
+    if (!room) return;
+
+    const player = Object.values(room.players).find((p) => p.socketId === socket.id);
+    if (player) {
+      player.cursor = { x, y };
+      socket.to(code).emit('cursor_updated', { playerId: player.id, x, y });
     }
   });
 
@@ -328,12 +468,14 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
   socket.on('send_chat', ({ roomCode, text }) => {
     const code = roomCode.toUpperCase();
     const room = roomStore.getRoom(code);
-    if (!room || !room.players[socket.id]) return;
+    if (!room) return;
 
-    const player = room.players[socket.id];
+    const player = Object.values(room.players).find((p) => p.socketId === socket.id);
+    if (!player) return;
+
     const message: ChatMessage = {
       id: `msg-${Date.now()}-${Math.random()}`,
-      senderId: socket.id,
+      senderId: player.id,
       senderName: player.name,
       senderColor: player.color,
       text: text.trim(),
