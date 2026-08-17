@@ -74,6 +74,9 @@ export default function LandingPage() {
             <Link href="/join" className="btn-piece btn-piece-ghost">
               Join a room
             </Link>
+            <Link href="/solo" className="btn-piece btn-piece-solo">
+              🎮 Play Solo
+            </Link>
           </div>
 
           <div className="jb-mono mt-1 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10.5px] uppercase tracking-wider text-[#6C7A94]">
@@ -191,6 +194,13 @@ export default function LandingPage() {
           border: 1.5px solid rgba(245,239,224,0.22);
         }
         .btn-piece-ghost:hover { border-color: rgba(245,239,224,0.45); transform: translateY(-2px); }
+
+        .btn-piece-solo {
+          background: #F4B942;
+          color: #0F1C2E;
+        }
+        .btn-piece-solo::before { background: #F4B942; }
+        .btn-piece-solo:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -10px rgba(244,185,66,0.65); }
 
         .hero-mosaic {
           display: grid;

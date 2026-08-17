@@ -5,14 +5,34 @@ import Link from "next/link";
 import { useRoom } from "@/context/RoomContext";
 import { usePuzzleState } from "@/hooks/usePuzzleState";
 import { drawPiecePath } from "@/lib/puzzleGenerator";
-import { PuzzlePieceData } from "@/types/puzzle";
+import { PuzzleConfig, PuzzlePieceData } from "@/types/puzzle";
 import { Player } from "@/types/room";
 
 /* ──────────────────────────────────────────────────────────
- * THEME COLOR PALETTES
+ * THEME COLOR PALETTES & TYPE DEFINITION
  * Default is NIGHT MODE (Dark Theme) per user request
  * ────────────────────────────────────────────────────────── */
-const DARK_THEME = {
+interface ThemeColors {
+  pageBg: string;
+  boardBg: string;
+  boardBorder: string;
+  boardOutline: string;
+  grid: string;
+  matDots: string;
+  cardBg: string;
+  cardBorder: string;
+  headerGreen: string;
+  headerText: string;
+  textPrimary: string;
+  textMuted: string;
+  accentGold: string;
+  pieceBorder: string;
+  pieceSeam: string;
+  shadowColor: string;
+  dragShadowColor: string;
+}
+
+const DARK_THEME: ThemeColors = {
   pageBg: "#0F1720",
   boardBg: "#16222F",
   boardBorder: "#253446",
@@ -32,7 +52,7 @@ const DARK_THEME = {
   dragShadowColor: "rgba(0,0,0,0.60)",
 };
 
-const LIGHT_THEME = {
+const LIGHT_THEME: ThemeColors = {
   pageBg: "#F4F0E8",
   boardBg: "#EFE9DF",
   boardBorder: "#D8CEBF",
@@ -73,30 +93,6 @@ export default function RoomPage() {
   const isCompletedSelf = room?.mode === 'competitive' ? !!room?.competitiveResults?.[localPlayerId] : isCompleted;
   const isInteractive = room?.status === 'playing' && !isSpectator && !isCompletedSelf && !room?.quitPlayers?.includes(localPlayerId);
 
-  // Opponent piece states for competitive mode
-  const opponentPiecesRef = useRef<Record<string, PuzzlePieceData[]>>({});
-  const [opponentProgress, setOpponentProgress] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    if (room?.mode === 'competitive' && room.playerPieces) {
-      const myId = typeof window !== 'undefined' ? localStorage.getItem('piece-together-player-id') : null;
-      const currentPieces: Record<string, PuzzlePieceData[]> = {};
-      const currentProgress: Record<string, number> = {};
-      
-      for (const [pid, pPieces] of Object.entries(room.playerPieces)) {
-        if (pid === myId) continue;
-        currentPieces[pid] = pPieces;
-        
-        const placed = pPieces.filter(p => p.isPlaced).length;
-        const total = pPieces.length || 1;
-        currentProgress[pid] = Math.round((placed / total) * 100);
-      }
-      
-      opponentPiecesRef.current = currentPieces;
-      setOpponentProgress(currentProgress);
-    }
-  }, [room?.playerPieces, room?.mode]);
-
   // DEFAULT TO NIGHT MODE (Dark Theme) per user request
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const C = theme === "dark" ? DARK_THEME : LIGHT_THEME;
@@ -104,6 +100,7 @@ export default function RoomPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
   // Pan & Zoom states
@@ -120,6 +117,8 @@ export default function RoomPage() {
   const stackOrderRef = useRef<PuzzlePieceData[]>([]);
   const [cursors, setCursors] = useState<Record<string, { x: number; y: number }>>({});
   const [mobileStatsOpen, setMobileStatsOpen] = useState(false);
+  const [mobileOpponentsOpen, setMobileOpponentsOpen] = useState(false);
+  const [mobileLeaderboardOpen, setMobileLeaderboardOpen] = useState(false);
   const [showRef, setShowRef] = useState(false);
   const [autoSnapEnabled, setAutoSnapEnabled] = useState(true);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -174,6 +173,7 @@ export default function RoomPage() {
     img.src = room.config.imageUrl;
     img.onload = () => {
       imgRef.current = img;
+      setLoadedImage(img);
       setImageLoaded(true);
     };
   }, [room?.config?.imageUrl]);
@@ -195,7 +195,7 @@ export default function RoomPage() {
     };
   }, [imageLoaded, room?.config]);
 
-  // Socket cursor, snap & opponent events
+  // Socket cursor & snap events
   useEffect(() => {
     if (!socket) return;
 
@@ -206,138 +206,18 @@ export default function RoomPage() {
       setCursors((prev) => ({ ...prev, [playerId]: { x, y } }));
     }
 
-    function onPiecesSnapped(data: any) {
+    function onPiecesSnapped(data: { pieceId?: number; playerId?: string }) {
       if (!data.playerId || data.playerId === myId) {
         playSnapSound();
       }
-      if (data.playerId && data.playerId !== myId) {
-        onOpponentPiecesSnapped(data);
-      }
-    }
-
-    function onOpponentPieceLocked(data: any) {
-      if (!data.playerId || data.playerId === myId) return;
-      const { pieceId, lockedBy, lockedByName, lockedByColor, playerId } = data;
-      const pieces = opponentPiecesRef.current[playerId];
-      if (!pieces) return;
-      opponentPiecesRef.current[playerId] = pieces.map(p => {
-        if (p.id === pieceId || (p.groupId && p.groupId === pieces.find(item => item.id === pieceId)?.groupId)) {
-          return { ...p, lockedBy, lockedByName, lockedByColor };
-        }
-        return p;
-      });
-    }
-
-    function onOpponentPieceUnlocked(data: any) {
-      if (!data.playerId || data.playerId === myId) return;
-      const { pieceId, playerId } = data;
-      const pieces = opponentPiecesRef.current[playerId];
-      if (!pieces) return;
-      opponentPiecesRef.current[playerId] = pieces.map(p => {
-        if (p.id === pieceId || (p.groupId && p.groupId === pieces.find(item => item.id === pieceId)?.groupId)) {
-          return { ...p, lockedBy: null, lockedByName: null, lockedByColor: null };
-        }
-        return p;
-      });
-    }
-
-    function onOpponentPieceMoved(data: any) {
-      if (!data.playerId || data.playerId === myId) return;
-      const { pieceId, x, y, playerId } = data;
-      const pieces = opponentPiecesRef.current[playerId];
-      if (!pieces) return;
-      const target = pieces.find(p => p.id === pieceId);
-      if (!target || target.isPlaced) return;
-
-      opponentPiecesRef.current[playerId] = pieces.map(p => {
-        if (p.groupId && p.groupId === target.groupId) {
-          return {
-            ...p,
-            currentX: x + (p.targetX - target.targetX),
-            currentY: y + (p.targetY - target.targetY),
-          };
-        }
-        if (p.id === pieceId) {
-          return { ...p, currentX: x, currentY: y };
-        }
-        return p;
-      });
-    }
-
-    function onOpponentPiecesSnapped(data: any) {
-      const { anchorPieceId, pieceIds, targetX, targetY, groupId, isPlaced, progressPercent, playerId, pieces: serverPieces } = data;
-      if (!playerId || playerId === myId) return;
-
-      setOpponentProgress(prev => ({ ...prev, [playerId]: progressPercent }));
-
-      const pieces = opponentPiecesRef.current[playerId];
-      if (!pieces) return;
-
-      if (serverPieces && serverPieces.length > 0) {
-        opponentPiecesRef.current[playerId] = pieces.map(p => {
-          const match = serverPieces.find((s: any) => s.id === p.id);
-          if (match) {
-            return {
-              ...p,
-              ...match,
-              lockedBy: null,
-              lockedByName: null,
-              lockedByColor: null,
-            };
-          }
-          return p;
-        });
-        return;
-      }
-
-      const anchor = pieces.find(p => p.id === anchorPieceId) || pieces.find(p => pieceIds.includes(p.id));
-      if (!anchor) return;
-
-      opponentPiecesRef.current[playerId] = pieces.map(p => {
-        if (pieceIds.includes(p.id) || (p.groupId && pieceIds.some((id: any) => pieces.find(item => item.id === id)?.groupId === p.groupId))) {
-          return {
-            ...p,
-            currentX: isPlaced ? p.targetX : targetX + (p.targetX - anchor.targetX),
-            currentY: isPlaced ? p.targetY : targetY + (p.targetY - anchor.targetY),
-            groupId,
-            isPlaced,
-            lockedBy: null,
-            lockedByName: null,
-            lockedByColor: null,
-          };
-        }
-        return p;
-      });
-    }
-
-    function onOpponentSnapRejected(data: any) {
-      if (!data.playerId || data.playerId === myId) return;
-      const { playerId, pieces: updatedPieces } = data;
-      const pieces = opponentPiecesRef.current[playerId];
-      if (!pieces) return;
-      opponentPiecesRef.current[playerId] = pieces.map(p => {
-        const match = updatedPieces.find((u: any) => u.id === p.id);
-        if (match) {
-          return { ...p, ...match };
-        }
-        return p;
-      });
     }
 
     socket.on("cursor_updated", onCursorUpdated);
     socket.on("pieces_snapped", onPiecesSnapped);
-    socket.on("piece_locked", onOpponentPieceLocked);
-    socket.on("piece_unlocked", onOpponentPieceUnlocked);
-    socket.on("piece_moved", onOpponentPieceMoved);
-    socket.on("snap_rejected", onOpponentSnapRejected);
 
     return () => {
       socket.off("cursor_updated", onCursorUpdated);
       socket.off("pieces_snapped", onPiecesSnapped);
-      socket.off("piece_locked", onOpponentPieceLocked);
-      socket.off("piece_unlocked", onOpponentPieceUnlocked);
-      socket.off("piece_moved", onOpponentPieceMoved);
-      socket.off("snap_rejected", onOpponentSnapRejected);
     };
   }, [socket, playSnapSound]);
 
@@ -493,7 +373,7 @@ export default function RoomPage() {
       ctx.restore();
     }
 
-    // Render multiplayer cursors (only in coop, or if we want cursors)
+    // Render multiplayer cursors (only in coop)
     if (room.players && room.mode !== 'competitive') {
       for (const [pid, pos] of Object.entries(cursors)) {
         if (pid === socket?.id) continue;
@@ -815,7 +695,7 @@ export default function RoomPage() {
           placed = pieces.filter(pPiece => pPiece.isPlaced).length;
           total = pieces.length || total;
         } else {
-          const oppPieces = opponentPiecesRef.current[p.id] || [];
+          const oppPieces = room.playerPieces?.[p.id] || [];
           placed = oppPieces.filter(pPiece => pPiece.isPlaced).length;
           total = oppPieces.length || total;
         }
@@ -845,7 +725,7 @@ export default function RoomPage() {
         // 3. Active players sorted by remaining pieces (fewer left = higher rank)
         return a.left - b.left;
       });
-  }, [room, pieces, opponentProgress, localPlayerId]);
+  }, [room, pieces, localPlayerId]);
 
   const isLobby = room?.status === "lobby";
 
@@ -1093,8 +973,8 @@ export default function RoomPage() {
               onContextMenu={(e) => e.preventDefault()}
             />
 
-            {/* Leaderboard HUD */}
-            <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 rounded-2xl border p-3 shadow-md bg-[#192533]/90 border-[#26364A] backdrop-blur-md w-60">
+            {/* Leaderboard HUD (Desktop only) */}
+            <div className="absolute top-4 left-4 z-20 hidden sm:flex flex-col gap-2 rounded-2xl border p-3 shadow-md bg-[#192533]/90 border-[#26364A] backdrop-blur-md w-60">
               <div className="text-[10px] font-bold uppercase tracking-wider text-[#8A96AE] flex items-center justify-between">
                 <span>🏆 Leaderboard</span>
                 {room.status === 'playing' && (
@@ -1108,7 +988,7 @@ export default function RoomPage() {
                       <span className="font-mono text-[#F59E0B] font-bold w-4 text-right">
                         {item.result ? `#${item.result.place}` : `${idx + 1}`}
                       </span>
-                      <span className="truncate max-w-[100px] font-semibold" style={{ color: item.player.color }}>
+                      <span className="truncate max-w-25 font-semibold" style={{ color: item.player.color }}>
                         {item.player.name}
                         {item.player.id === localPlayerId && " (You)"}
                       </span>
@@ -1127,6 +1007,42 @@ export default function RoomPage() {
                 ))}
               </div>
             </div>
+
+            {/* Mobile Leaderboard Drawer */}
+            {mobileLeaderboardOpen && (
+              <div className="absolute inset-0 z-30 sm:hidden bg-[#0F1720]/60 backdrop-blur-sm flex items-start justify-center pt-16 px-4">
+                <div className="w-full max-w-sm rounded-2xl border border-[#26364A] bg-[#192533]/95 shadow-2xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#8A96AE]">🏆 Leaderboard</span>
+                    <button onClick={() => setMobileLeaderboardOpen(false)} className="text-sm font-bold px-2 py-1 rounded hover:bg-white/5">✕</button>
+                  </div>
+                  <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto">
+                    {leaderboard.map((item, idx) => (
+                      <div key={item.player.id} className="flex items-center justify-between text-xs py-1.5 border-b border-white/5 last:border-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-mono text-[#F59E0B] font-bold w-4 text-right">
+                            {item.result ? `#${item.result.place}` : `${idx + 1}`}
+                          </span>
+                          <span className="truncate max-w-32 font-semibold" style={{ color: item.player.color }}>
+                            {item.player.name}
+                            {item.player.id === localPlayerId && " (You)"}
+                          </span>
+                        </div>
+                        <span className="font-mono text-[10px] font-bold text-right shrink-0">
+                          {item.result ? (
+                            <span className="text-amber-400">Done ({item.result.durationSeconds}s)</span>
+                          ) : item.isQuit ? (
+                            <span className="text-red-400">Resigned</span>
+                          ) : (
+                            <span style={{ color: item.player.color }}>Left: {item.left}</span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Spectator HUD notice */}
             {isSpectator && (
@@ -1162,21 +1078,37 @@ export default function RoomPage() {
 
             {/* Mobile top action row */}
             <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between sm:hidden">
-              <button
-                onClick={() => setMobileStatsOpen(true)}
-                className="flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold shadow-md backdrop-blur-md"
-                style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
-              >
-                📊 Details
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setMobileStatsOpen(true)}
+                  className="flex items-center gap-1 rounded-full border px-3 py-2 text-xs font-bold shadow-md backdrop-blur-md"
+                  style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+                >
+                  📊
+                </button>
+                <button
+                  onClick={() => setMobileLeaderboardOpen(true)}
+                  className="flex items-center gap-1 rounded-full border px-3 py-2 text-xs font-bold shadow-md backdrop-blur-md"
+                  style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+                >
+                  🏆
+                </button>
+                <button
+                  onClick={() => setMobileOpponentsOpen(true)}
+                  className="flex items-center gap-1 rounded-full border px-3 py-2 text-xs font-bold shadow-md backdrop-blur-md"
+                  style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}
+                >
+                  👥
+                </button>
+              </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={handleFixPlacedPieces}
-                  className="flex items-center gap-1 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-md transition-transform active:scale-95"
+                  className="flex items-center gap-1 rounded-full px-3 py-2 text-xs font-bold text-white shadow-md transition-transform active:scale-95"
                   style={{ backgroundColor: C.headerGreen }}
                 >
-                  ✨ Fix Board
+                  ✨
                 </button>
                 <button
                   onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
@@ -1283,37 +1215,67 @@ export default function RoomPage() {
             )}
           </div>
 
-          {/* Opponents column (right side) */}
-          {Object.keys(opponentPiecesRef.current).length > 0 ? (
-            <div className="w-64 sm:w-72 md:w-80 flex flex-col gap-4 overflow-y-auto p-4 bg-[#16222F]/40 border-l border-[#26364A] shrink-0">
+          {/* Opponents column (right side) — Desktop only */}
+          {room.playerPieces && Object.keys(room.playerPieces).filter(pid => pid !== localPlayerId).length > 0 ? (
+            <div className="hidden sm:flex w-64 sm:w-72 md:w-80 flex-col gap-4 overflow-y-auto p-4 bg-[#16222F]/40 border-l border-[#26364A] shrink-0">
               <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: C.cardBorder }}>
                 <h3 className="text-[10px] font-bold uppercase tracking-wider text-[#8A96AE]">Opponent Feeds</h3>
-                <span className="text-[10px] font-mono text-[#8A96AE]">{Object.keys(opponentPiecesRef.current).length} active</span>
+                <span className="text-[10px] font-mono text-[#8A96AE]">{Object.keys(room.playerPieces).filter(pid => pid !== localPlayerId).length} active</span>
               </div>
               <div className="flex flex-col gap-4">
-                {Object.keys(opponentPiecesRef.current).map(pid => {
+                {Object.keys(room.playerPieces).map(pid => {
+                  if (pid === localPlayerId) return null;
                   const p = room.players[pid];
                   if (!p || p.isSpectator) return null;
                   return (
                     <OpponentMiniBoard
                       key={pid}
                       playerId={pid}
-                      opponentPiecesRef={opponentPiecesRef}
                       player={p}
                       config={room.config}
-                      image={imgRef.current}
+                      image={loadedImage}
                       themeColors={C}
                       result={room.competitiveResults?.[pid]}
                       isQuit={room.quitPlayers?.includes(pid)}
-                      pct={opponentProgress[pid] || 0}
                     />
                   );
                 })}
               </div>
             </div>
           ) : (
-            <div className="w-64 sm:w-72 md:w-80 flex flex-col items-center justify-center p-6 bg-[#16222F]/20 border-l border-[#26364A] shrink-0 text-center text-xs text-[#9CA3AF] italic">
+            <div className="hidden sm:flex w-64 sm:w-72 md:w-80 flex-col items-center justify-center p-6 bg-[#16222F]/20 border-l border-[#26364A] shrink-0 text-center text-xs text-[#9CA3AF] italic">
               No active opponents in race
+            </div>
+          )}
+
+          {/* Mobile Opponents Drawer */}
+          {mobileOpponentsOpen && (
+            <div className="absolute inset-0 z-30 sm:hidden bg-[#0F1720]/60 backdrop-blur-sm flex items-start justify-center pt-16 px-4">
+              <div className="w-full max-w-sm rounded-2xl border border-[#26364A] bg-[#192533]/95 shadow-2xl p-4 max-h-[70vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#8A96AE]">👥 Opponent Feeds</span>
+                  <button onClick={() => setMobileOpponentsOpen(false)} className="text-sm font-bold px-2 py-1 rounded hover:bg-white/5">✕</button>
+                </div>
+                <div className="flex flex-col gap-4">
+                  {Object.keys(room.playerPieces || {}).map(pid => {
+                    if (pid === localPlayerId) return null;
+                    const p = room.players[pid];
+                    if (!p || p.isSpectator) return null;
+                    return (
+                      <OpponentMiniBoard
+                        key={pid}
+                        playerId={pid}
+                        player={p}
+                        config={room.config}
+                        image={loadedImage}
+                        themeColors={C}
+                        result={room.competitiveResults?.[pid]}
+                        isQuit={room.quitPlayers?.includes(pid)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1472,7 +1434,7 @@ export default function RoomPage() {
                       <span className="text-[#F59E0B] font-extrabold w-5 text-right font-mono">
                         {item.result ? `#${item.result.place}` : `${idx + 1}`}
                       </span>
-                      <span className="font-bold text-[#F3F4F6] truncate max-w-[140px]" style={{ color: item.player.color }}>
+                      <span className="font-bold text-[#F3F4F6] truncate max-w-35" style={{ color: item.player.color }}>
                         {item.player.name}
                         {item.player.id === localPlayerId && " (You)"}
                       </span>
@@ -1511,144 +1473,274 @@ export default function RoomPage() {
  * ────────────────────────────────────────────────────────── */
 interface OpponentMiniBoardProps {
   playerId: string;
-  opponentPiecesRef: React.MutableRefObject<Record<string, PuzzlePieceData[]>>;
   player: Player;
-  config: any;
+  config: PuzzleConfig | null;
   image: HTMLImageElement | null;
-  themeColors: any;
+  themeColors: ThemeColors;
   result?: { finishedAt: number; durationSeconds: number; place: number };
   isQuit?: boolean;
-  pct: number;
 }
 
 function OpponentMiniBoard({
   playerId,
-  opponentPiecesRef,
   player,
   config,
   image,
   themeColors,
   result,
   isQuit,
-  pct,
 }: OpponentMiniBoardProps) {
+  const { socket, room } = useRoom();
+  const [pieces, setPieces] = useState<PuzzlePieceData[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Sync initial board pieces from room
   useEffect(() => {
-    let animId: number;
-    function tick() {
-      const canvas = canvasRef.current;
-      if (!canvas || !config || !image) {
-        animId = requestAnimationFrame(tick);
-        return;
-      }
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        animId = requestAnimationFrame(tick);
-        return;
-      }
+    const initial = room?.playerPieces?.[playerId];
+    if (initial && initial.length > 0) {
+      const timer = setTimeout(() => {
+        setPieces(initial);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [room?.playerPieces, playerId]);
 
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-      }
+  // Subscribe to real-time socket events for this opponent board
+  useEffect(() => {
+    if (!socket) return;
 
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const margin = 80;
-      const fitWidth = config.boardWidth + margin * 2;
-      const fitHeight = config.boardHeight + margin * 2;
-      const scale = Math.min(rect.width / fitWidth, rect.height / fitHeight);
-
-      const offsetX = (rect.width - config.boardWidth * scale) / 2;
-      const offsetY = (rect.height - config.boardHeight * scale) / 2;
-
-      ctx.setTransform(scale * dpr, 0, 0, scale * dpr, offsetX * dpr, offsetY * dpr);
-
-      // Wooden Trim board background
-      ctx.save();
-      ctx.fillStyle = themeColors.boardBorder;
-      ctx.beginPath();
-      ctx.roundRect(-20, -20, config.boardWidth + 40, config.boardHeight + 40, 16);
-      ctx.fill();
-
-      ctx.fillStyle = themeColors.boardBg;
-      ctx.beginPath();
-      ctx.roundRect(-10, -10, config.boardWidth + 20, config.boardHeight + 20, 12);
-      ctx.fill();
-      ctx.restore();
-
-      // Board outline
-      ctx.save();
-      ctx.strokeStyle = themeColors.boardOutline;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(0, 0, config.boardWidth, config.boardHeight);
-      ctx.restore();
-
-      // Draw opponent board grid
-      const pw = config.boardWidth / config.cols;
-      const ph = config.boardHeight / config.rows;
-      ctx.save();
-      ctx.strokeStyle = themeColors.grid;
-      ctx.lineWidth = 1;
-      for (let r = 1; r < config.rows; r++) {
-        ctx.beginPath();
-        ctx.moveTo(0, r * ph);
-        ctx.lineTo(config.boardWidth, r * ph);
-        ctx.stroke();
-      }
-      for (let c = 1; c < config.cols; c++) {
-        ctx.beginPath();
-        ctx.moveTo(c * pw, 0);
-        ctx.lineTo(c * pw, config.boardHeight);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // Draw pieces
-      const pieces = opponentPiecesRef.current[playerId] || [];
-      if (pieces.length > 0) {
-        const tabOverflow = Math.max(pw, ph) * 0.26;
-        const srcPw = image.naturalWidth / config.cols;
-        const srcPh = image.naturalHeight / config.rows;
-        const srcOverflowX = tabOverflow * (image.naturalWidth / config.boardWidth);
-        const srcOverflowY = tabOverflow * (image.naturalHeight / config.boardHeight);
-
-        // Sort: placed pieces first
-        const sorted = [...pieces].sort((a, b) => (a.isPlaced === b.isPlaced ? 0 : a.isPlaced ? -1 : 1));
-
-        for (const piece of sorted) {
-          ctx.save();
-          ctx.translate(piece.currentX, piece.currentY);
-          drawPiecePath(ctx, piece, pw, ph);
-          ctx.clip();
-          const sx = piece.gridX * srcPw - srcOverflowX;
-          const sy = piece.gridY * srcPh - srcOverflowY;
-          const sw = srcPw + srcOverflowX * 2;
-          const sh = srcPh + srcOverflowY * 2;
-          ctx.drawImage(image, sx, sy, sw, sh, -tabOverflow, -tabOverflow, pw + tabOverflow * 2, ph + tabOverflow * 2);
-          ctx.restore();
-
-          // Border seam
-          ctx.save();
-          ctx.translate(piece.currentX, piece.currentY);
-          ctx.strokeStyle = piece.isPlaced ? themeColors.pieceSeam : themeColors.pieceBorder;
-          ctx.lineWidth = piece.isPlaced ? 1.0 : 1.4;
-          drawPiecePath(ctx, piece, pw, ph);
-          ctx.stroke();
-          ctx.restore();
-        }
-      }
-
-      animId = requestAnimationFrame(tick);
+    function onPieceLocked(data: { pieceId: number; lockedBy: string; lockedByName: string; lockedByColor: string; playerId?: string }) {
+      if (data.playerId !== playerId) return;
+      setPieces((prev) =>
+        prev.map((p) => {
+          if (p.id === data.pieceId || (p.groupId && p.groupId === prev.find((item) => item.id === data.pieceId)?.groupId)) {
+            return { ...p, lockedBy: data.lockedBy, lockedByName: data.lockedByName, lockedByColor: data.lockedByColor };
+          }
+          return p;
+        })
+      );
     }
 
-    tick();
-    return () => cancelAnimationFrame(animId);
-  }, [playerId, opponentPiecesRef, config, image, themeColors]);
+    function onPieceUnlocked(data: { pieceId: number; playerId?: string }) {
+      if (data.playerId !== playerId) return;
+      setPieces((prev) =>
+        prev.map((p) => {
+          if (p.id === data.pieceId || (p.groupId && p.groupId === prev.find((item) => item.id === data.pieceId)?.groupId)) {
+            return { ...p, lockedBy: null, lockedByName: null, lockedByColor: null };
+          }
+          return p;
+        })
+      );
+    }
+
+    function onPieceMoved(data: { pieceId: number; x: number; y: number; playerId?: string }) {
+      if (data.playerId !== playerId) return;
+      setPieces((prev) => {
+        const target = prev.find((p) => p.id === data.pieceId);
+        if (!target || target.isPlaced) return prev;
+
+        return prev.map((p) => {
+          if (p.groupId && p.groupId === target.groupId) {
+            return {
+              ...p,
+              currentX: data.x + (p.targetX - target.targetX),
+              currentY: data.y + (p.targetY - target.targetY),
+            };
+          }
+          if (p.id === data.pieceId) {
+            return { ...p, currentX: data.x, currentY: data.y };
+          }
+          return p;
+        });
+      });
+    }
+
+    function onPiecesSnapped(data: {
+      anchorPieceId: number;
+      pieceIds: number[];
+      targetX: number;
+      targetY: number;
+      groupId: number;
+      isPlaced: boolean;
+      progressPercent: number;
+      playerId?: string;
+      pieces?: PuzzlePieceData[];
+    }) {
+      if (data.playerId !== playerId) return;
+
+      setPieces((prev) => {
+        if (data.pieces && data.pieces.length > 0) {
+          return prev.map((p) => {
+            const match = data.pieces!.find((s) => s.id === p.id);
+            if (match) {
+              return {
+                ...p,
+                ...match,
+                lockedBy: null,
+                lockedByName: null,
+                lockedByColor: null,
+              };
+            }
+            return p;
+          });
+        }
+
+        const anchor = prev.find((p) => p.id === data.anchorPieceId) || prev.find((p) => data.pieceIds.includes(p.id));
+        if (!anchor) return prev;
+
+        return prev.map((p) => {
+          if (data.pieceIds.includes(p.id) || (p.groupId && data.pieceIds.some((id) => prev.find((item) => item.id === id)?.groupId === p.groupId))) {
+            return {
+              ...p,
+              currentX: data.isPlaced ? p.targetX : data.targetX + (p.targetX - anchor.targetX),
+              currentY: data.isPlaced ? p.targetY : data.targetY + (p.targetY - anchor.targetY),
+              groupId: data.groupId,
+              isPlaced: data.isPlaced,
+              lockedBy: null,
+              lockedByName: null,
+              lockedByColor: null,
+            };
+          }
+          return p;
+        });
+      });
+    }
+
+    function onSnapRejected(data: { pieceIds: number[]; reason: string; playerId?: string; pieces: PuzzlePieceData[] }) {
+      if (data.playerId !== playerId) return;
+      setPieces((prev) =>
+        prev.map((p) => {
+          const match = data.pieces.find((u) => u.id === p.id);
+          if (match) {
+            return { ...p, ...match };
+          }
+          return p;
+        })
+      );
+    }
+
+    socket.on('piece_locked', onPieceLocked);
+    socket.on('piece_unlocked', onPieceUnlocked);
+    socket.on('piece_moved', onPieceMoved);
+    socket.on('pieces_snapped', onPiecesSnapped);
+    socket.on('snap_rejected', onSnapRejected);
+
+    return () => {
+      socket.off('piece_locked', onPieceLocked);
+      socket.off('piece_unlocked', onPieceUnlocked);
+      socket.off('piece_moved', onPieceMoved);
+      socket.off('pieces_snapped', onPiecesSnapped);
+      socket.off('snap_rejected', onSnapRejected);
+    };
+  }, [socket, playerId]);
+
+  // Redraw mini canvas whenever state updates
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !config || !image) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+    }
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const margin = 80;
+    const fitWidth = config.boardWidth + margin * 2;
+    const fitHeight = config.boardHeight + margin * 2;
+    const scale = Math.min(rect.width / fitWidth, rect.height / fitHeight);
+
+    const offsetX = (rect.width - config.boardWidth * scale) / 2;
+    const offsetY = (rect.height - config.boardHeight * scale) / 2;
+
+    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, offsetX * dpr, offsetY * dpr);
+
+    // Wooden Trim board background
+    ctx.save();
+    ctx.fillStyle = themeColors.boardBorder;
+    ctx.beginPath();
+    ctx.roundRect(-20, -20, config.boardWidth + 40, config.boardHeight + 40, 16);
+    ctx.fill();
+
+    ctx.fillStyle = themeColors.boardBg;
+    ctx.beginPath();
+    ctx.roundRect(-10, -10, config.boardWidth + 20, config.boardHeight + 20, 12);
+    ctx.fill();
+    ctx.restore();
+
+    // Board outline
+    ctx.save();
+    ctx.strokeStyle = themeColors.boardOutline;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(0, 0, config.boardWidth, config.boardHeight);
+    ctx.restore();
+
+    // Draw opponent board grid
+    const pw = config.boardWidth / config.cols;
+    const ph = config.boardHeight / config.rows;
+    ctx.save();
+    ctx.strokeStyle = themeColors.grid;
+    ctx.lineWidth = 1;
+    for (let r = 1; r < config.rows; r++) {
+      ctx.beginPath();
+      ctx.moveTo(0, r * ph);
+      ctx.lineTo(config.boardWidth, r * ph);
+      ctx.stroke();
+    }
+    for (let c = 1; c < config.cols; c++) {
+      ctx.beginPath();
+      ctx.moveTo(c * pw, 0);
+      ctx.lineTo(c * pw, config.boardHeight);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Draw pieces
+    if (pieces.length > 0) {
+      const tabOverflow = Math.max(pw, ph) * 0.26;
+      const srcPw = image.naturalWidth / config.cols;
+      const srcPh = image.naturalHeight / config.rows;
+      const srcOverflowX = tabOverflow * (image.naturalWidth / config.boardWidth);
+      const srcOverflowY = tabOverflow * (image.naturalHeight / config.boardHeight);
+
+      // Sort: placed pieces first
+      const sorted = [...pieces].sort((a, b) => (a.isPlaced === b.isPlaced ? 0 : a.isPlaced ? -1 : 1));
+
+      for (const piece of sorted) {
+        ctx.save();
+        ctx.translate(piece.currentX, piece.currentY);
+        drawPiecePath(ctx, piece, pw, ph);
+        ctx.clip();
+        const sx = piece.gridX * srcPw - srcOverflowX;
+        const sy = piece.gridY * srcPh - srcOverflowY;
+        const sw = srcPw + srcOverflowX * 2;
+        const sh = srcPh + srcOverflowY * 2;
+        ctx.drawImage(image, sx, sy, sw, sh, -tabOverflow, -tabOverflow, pw + tabOverflow * 2, ph + tabOverflow * 2);
+        ctx.restore();
+
+        // Border seam
+        ctx.save();
+        ctx.translate(piece.currentX, piece.currentY);
+        ctx.strokeStyle = piece.isPlaced ? themeColors.pieceSeam : themeColors.pieceBorder;
+        ctx.lineWidth = piece.isPlaced ? 1.0 : 1.4;
+        drawPiecePath(ctx, piece, pw, ph);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }, [pieces, config, image, themeColors]);
+
+  const pct = useMemo(() => {
+    const placed = pieces.filter(p => p.isPlaced).length;
+    const total = pieces.length || 1;
+    return Math.round((placed / total) * 100);
+  }, [pieces]);
 
   return (
     <div className="flex flex-col gap-2 rounded-2xl border p-3 bg-[#192533] border-[#26364A] shadow-md relative overflow-hidden transition-all duration-300">
@@ -1658,7 +1750,7 @@ function OpponentMiniBoard({
           <div className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold" style={{ backgroundColor: player.color + "40", border: `1px solid ${player.color}`, color: player.color }}>
             {player.avatar}
           </div>
-          <span className="font-bold text-[#F3F4F6] truncate max-w-[120px]">{player.name}</span>
+          <span className="font-bold text-[#F3F4F6] truncate max-w-30">{player.name}</span>
           {player.isOffline && <span className="text-[10px] text-red-400 animate-pulse font-mono">OFFLINE</span>}
         </div>
         <div className="flex items-center gap-1.5 font-bold">
@@ -1677,7 +1769,7 @@ function OpponentMiniBoard({
       </div>
 
       {/* Mini canvas */}
-      <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#0F1720] border border-[#26364A]">
+      <div className="w-full aspect-4/3 rounded-xl overflow-hidden bg-[#0F1720] border border-[#26364A]">
         <canvas ref={canvasRef} className="w-full h-full" />
       </div>
 
