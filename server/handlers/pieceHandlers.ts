@@ -2,6 +2,7 @@ import { Socket, Server } from 'socket.io';
 import { roomStore } from '../utils/roomStore';
 import { dbStore } from '../utils/dbStore';
 import { ChatMessage } from '../../src/types/room';
+import { PuzzlePieceData } from '../../src/types/puzzle';
 
 // Save database debounced map to avoid constant I/O during rapid moves
 const dbSaveTimeouts: Map<string, NodeJS.Timeout> = new Map();
@@ -349,7 +350,7 @@ export function registerPieceHandlers(io: Server, socket: Socket) {
     const pieceHeight = room.config.boardHeight / room.config.rows;
     const snapTolerance = Math.min(pieceWidth, pieceHeight) * 0.45;
 
-    const fixedPieces: any[] = [];
+    const fixedPieces: PuzzlePieceData[] = [];
 
     for (const p of pieces) {
       const distToTarget = Math.hypot(p.currentX - p.targetX, p.currentY - p.targetY);

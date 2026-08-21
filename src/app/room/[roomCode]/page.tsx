@@ -120,7 +120,6 @@ export default function RoomPage() {
   const [mobileOpponentsOpen, setMobileOpponentsOpen] = useState(false);
   const [mobileLeaderboardOpen, setMobileLeaderboardOpen] = useState(false);
   const [showRef, setShowRef] = useState(false);
-  const [autoSnapEnabled, setAutoSnapEnabled] = useState(true);
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Trigger celebratory confetti on completion
@@ -1140,15 +1139,7 @@ export default function RoomPage() {
 
             {/* RIGHT SIDEBAR ASSISTANT CARD ("Piece Snap & Single Error Fixer") */}
             <div className="absolute top-4 right-4 z-20 hidden md:flex flex-col gap-3 w-64 rounded-2xl border p-4 shadow-lg backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Piece Snap</span>
-                <button
-                  onClick={() => setAutoSnapEnabled((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoSnapEnabled ? "bg-emerald-600" : "bg-gray-400"}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoSnapEnabled ? "translate-x-6" : "translate-x-1"}`} />
-                </button>
-              </div>
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Piece Snap</span>
 
               <p className="text-xs leading-relaxed" style={{ color: C.textMuted }}>
                 Pieces snap automatically when placed close to their target or neighboring pieces.
@@ -1343,15 +1334,7 @@ export default function RoomPage() {
 
           {/* RIGHT SIDEBAR ASSISTANT CARD ("Piece Snap & Single Error Fixer") */}
           <div className="absolute top-4 right-4 z-20 hidden md:flex flex-col gap-3 w-64 rounded-2xl border p-4 shadow-lg backdrop-blur-md" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Piece Snap</span>
-              <button
-                onClick={() => setAutoSnapEnabled((v) => !v)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoSnapEnabled ? "bg-emerald-600" : "bg-gray-400"}`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoSnapEnabled ? "translate-x-6" : "translate-x-1"}`} />
-              </button>
-            </div>
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.textPrimary }}>Piece Snap</span>
 
             <p className="text-xs leading-relaxed" style={{ color: C.textMuted }}>
               Pieces snap automatically when placed close to their target or neighboring pieces.

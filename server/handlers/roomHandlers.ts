@@ -63,9 +63,9 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
       socket.join(code);
       console.log(`[Server] ✅ Room ${code} created by ${playerName} (session: ${playerId})`);
       callback({ success: true, roomCode: code });
-    } catch (e: any) {
+    } catch (e) {
       console.error(`[Server] ❌ create_room error:`, e);
-      callback({ success: false, error: e.message || 'Failed to create room' });
+      callback({ success: false, error: e instanceof Error ? e.message : 'Failed to create room' });
     }
   });
 
@@ -74,7 +74,7 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
     console.log(`[Server] join_room from socket ${socket.id}: code=${roomCode}, name=${playerName}, playerId=${playerId}`);
     try {
       const upperCode = roomCode.toUpperCase();
-      let room = roomStore.getRoom(upperCode);
+      const room = roomStore.getRoom(upperCode);
 
       if (!room) {
         console.warn(`[Server] ⚠️ Room ${upperCode} not found`);
@@ -82,7 +82,7 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
       }
 
       // 1. Reconnection Check
-      let existingPlayer = room.players[playerId];
+      const existingPlayer = room.players[playerId];
       if (existingPlayer) {
         console.log(`[Server] Player ${playerName} (${playerId}) reconnected to room ${upperCode}`);
         
@@ -170,9 +170,9 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
 
       console.log(`[Server] ✅ ${playerName} (session: ${playerId}) joined room ${upperCode} (spectator: ${isSpectator})`);
       callback({ success: true, room });
-    } catch (e: any) {
+    } catch (e) {
       console.error(`[Server] ❌ join_room error:`, e);
-      callback({ success: false, error: e.message || 'Failed to join room' });
+      callback({ success: false, error: e instanceof Error ? e.message : 'Failed to join room' });
     }
   });
 

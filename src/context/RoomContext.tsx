@@ -63,12 +63,19 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('[RoomContext] 🎮 game_started received, pieces:', pieces.length, 'config:', config.rows, 'x', config.cols);
       setRoom((prev) => {
         if (!prev) return null;
+        const stableId = typeof window !== 'undefined' ? localStorage.getItem('piece-together-player-id') : null;
+        const isCompetitive = prev.mode === 'competitive';
         return {
           ...prev,
           status: 'playing',
           config,
-          pieces,
           startedAt,
+          // In competitive mode, store player's own pieces in playerPieces
+          // so room_updated (which sets pieces=[]) doesn't wipe them
+          pieces: isCompetitive ? [] : pieces,
+          playerPieces: isCompetitive && stableId
+            ? { ...prev.playerPieces, [stableId]: pieces }
+            : prev.playerPieces,
         };
       });
     }

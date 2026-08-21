@@ -62,7 +62,6 @@ export default function SoloPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
   const [pieces, setPieces] = useState<PuzzlePieceData[]>([]);
@@ -110,7 +109,6 @@ export default function SoloPage() {
     img.src = config.imageUrl;
     img.onload = () => {
       imgRef.current = img;
-      setLoadedImage(img);
       setImageLoaded(true);
     };
   }, [config.imageUrl]);
@@ -124,7 +122,6 @@ export default function SoloPage() {
     setElapsed(0);
     setGameStarted(true);
     setImageLoaded(false);
-    setLoadedImage(null);
     imgRef.current = null;
 
     // Reload image
@@ -133,7 +130,6 @@ export default function SoloPage() {
     img.src = config.imageUrl;
     img.onload = () => {
       imgRef.current = img;
-      setLoadedImage(img);
       setImageLoaded(true);
     };
   };
@@ -694,8 +690,8 @@ export default function SoloPage() {
   if (!gameStarted) {
     return (
       <main className="pt-app relative flex min-h-dvh h-auto w-full flex-col overflow-y-auto bg-[#0F1C2E] text-[#F5EFE0] pb-32">
-        <div className="pointer-events-none fixed -left-24 -top-32 h-[420px] w-[420px] rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
-        <div className="pointer-events-none fixed -bottom-24 -right-16 h-[380px] w-[380px] rounded-full bg-[#F4B942]/8 blur-[100px]" />
+        <div className="pointer-events-none fixed -left-24 -top-32 h-105 w-105 rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
+        <div className="pointer-events-none fixed -bottom-24 -right-16 h-95 w-95 rounded-full bg-[#F4B942]/8 blur-[100px]" />
 
         <Link href="/" className="group absolute left-5 top-5 z-20 flex items-center gap-2 sm:left-8 sm:top-6">
           <span className="text-2xl transition-transform group-hover:scale-110">🧩</span>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRoom } from '../context/RoomContext';
 import { PuzzlePieceData } from '../types/puzzle';
 import { SNAP_DISTANCE_THRESHOLD } from '../lib/constants';
@@ -9,35 +9,42 @@ export function usePuzzleState() {
   const { socket, room } = useRoom();
   const [pieces, setPieces] = useState<PuzzlePieceData[]>([]);
   const [activePieceId, setActivePieceId] = useState<number | null>(null);
-  const [progressPercent, setProgressPercent] = useState<number>(0);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [completionData, setCompletionData] = useState<{ durationSeconds: number } | null>(null);
 
   const piecesRef = useRef<PuzzlePieceData[]>([]);
-  piecesRef.current = pieces;
 
-  // Sync pieces from room state
   useEffect(() => {
-    if (room?.pieces && room.mode !== 'competitive') {
-      setPieces(room.pieces);
-      const placed = room.pieces.filter((p) => p.isPlaced).length;
-      const total = room.pieces.length;
-      if (total > 0) {
-        setProgressPercent(Math.round((placed / total) * 100));
-      }
-    } else if (room?.mode === 'competitive' && room.playerPieces) {
+    piecesRef.current = pieces;
+  }, [pieces]);
+
+  // Derive source pieces from room state
+  const sourcePieces = useMemo(() => {
+    if (room?.pieces && room.mode !== 'competitive') return room.pieces;
+    if (room?.mode === 'competitive') {
       const myId = typeof window !== 'undefined' ? localStorage.getItem('piece-together-player-id') : null;
-      const myPieces = myId ? room.playerPieces[myId] : null;
-      if (myPieces) {
-        setPieces(myPieces);
-        const placed = myPieces.filter((p) => p.isPlaced).length;
-        const total = myPieces.length;
-        if (total > 0) {
-          setProgressPercent(Math.round((placed / total) * 100));
-        }
-      }
+      if (myId && room.playerPieces?.[myId]) return room.playerPieces[myId];
+      // Fallback: game_started event may set room.pieces to player's own pieces
+      if (room.pieces && room.pieces.length > 0) return room.pieces;
     }
+    return null;
   }, [room?.pieces, room?.playerPieces, room?.mode]);
+
+  // Track last synced source reference to avoid overwriting optimistic updates
+  const [lastSyncedSource, setLastSyncedSource] = useState<PuzzlePieceData[] | null>(null);
+
+  // Adjust state during render when source reference changes (React-recommended pattern)
+  if (sourcePieces && sourcePieces !== lastSyncedSource) {
+    setLastSyncedSource(sourcePieces);
+    setPieces(sourcePieces);
+  }
+
+  // Derived progress percentage
+  const progressPercent = useMemo(() => {
+    if (pieces.length === 0) return 0;
+    const placed = pieces.filter((p) => p.isPlaced).length;
+    return Math.round((placed / pieces.length) * 100);
+  }, [pieces]);
 
   // Socket listeners for real-time piece movements, locks, snaps
   useEffect(() => {
@@ -101,7 +108,6 @@ export function usePuzzleState() {
       targetY,
       groupId,
       isPlaced,
-      progressPercent,
       playerId,
       pieces: serverPieces,
     }: {
@@ -117,7 +123,6 @@ export function usePuzzleState() {
     }) {
       if (room?.mode === 'competitive' && playerId !== myId) return;
 
-      setProgressPercent(progressPercent);
       setPieces((prev) => {
         if (serverPieces && serverPieces.length > 0) {
           return prev.map((p) => {
@@ -156,7 +161,7 @@ export function usePuzzleState() {
       });
     }
 
-    function onSnapRejected({ pieceIds: _pieceIds, pieces: updatedPieces, playerId }: { pieceIds: number[]; pieces: PuzzlePieceData[]; playerId?: string }) {
+    function onSnapRejected({ pieces: updatedPieces, playerId }: { pieceIds: number[]; pieces: PuzzlePieceData[]; playerId?: string }) {
       if (room?.mode === 'competitive' && playerId !== myId) return;
 
       setPieces((prev) =>

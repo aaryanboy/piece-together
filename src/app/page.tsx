@@ -46,8 +46,8 @@ export default function LandingPage() {
   return (
     <main className="pt-app relative flex h-dvh w-full items-center overflow-hidden bg-[#0F1C2E] text-[#F5EFE0]">
       {/* ambient glow — one accent, kept quiet */}
-      <div className="pointer-events-none absolute -left-24 -top-32 h-[420px] w-[420px] rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
-      <div className="pointer-events-none absolute -bottom-24 -right-16 h-[380px] w-[380px] rounded-full bg-[#F4B942]/10 blur-[100px]" />
+      <div className="pointer-events-none absolute -left-24 -top-32 h-105 w-105 rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
+      <div className="pointer-events-none absolute -bottom-24 -right-16 h-95 w-95 rounded-full bg-[#F4B942]/10 blur-[100px]" />
 
       <div className="relative z-10 mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-8 px-6 sm:px-8 md:grid-cols-[1.15fr_0.85fr] md:gap-12 md:px-12">
         {/* Left — content */}
@@ -109,7 +109,7 @@ export default function LandingPage() {
         </div>
 
         {/* Right — signature puzzle mosaic (desktop/tablet only) */}
-        <div className="relative hidden aspect-[4/3] w-full md:block">
+        <div className="relative hidden aspect-4/3 w-full md:block">
           <div className="hero-mosaic">
             {tiles.map((t) => (
               <div

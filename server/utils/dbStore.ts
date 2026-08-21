@@ -2,10 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { RoomState } from '../../src/types/room';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let db: any = null;
 
 try {
   // Try importing better-sqlite3 dynamically
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Database = require('better-sqlite3');
   const dbDir = process.env.DB_DIR || process.cwd();
   const dbPath = process.env.DB_PATH || path.resolve(dbDir, 'piece_together.db');
@@ -29,7 +31,7 @@ const fallbackDir = process.env.DB_DIR ? path.resolve(process.env.DB_DIR, '.room
 if (!fs.existsSync(fallbackDir)) {
   try {
     fs.mkdirSync(fallbackDir, { recursive: true });
-  } catch (e) {
+  } catch {
     // Ignore
   }
 }
@@ -70,7 +72,7 @@ export const dbStore = {
         for (const row of rows) {
           try {
             rooms.push(JSON.parse(row.data_json));
-          } catch (e) {
+          } catch {
             // Ignore parse errors
           }
         }
@@ -82,7 +84,7 @@ export const dbStore = {
               try {
                 const content = fs.readFileSync(path.join(fallbackDir, file), 'utf-8');
                 rooms.push(JSON.parse(content));
-              } catch (e) {
+              } catch {
                 // Ignore parse errors
               }
             }

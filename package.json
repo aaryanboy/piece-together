@@ -7,7 +7,7 @@
     "server": "npx tsx server/index.ts",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint src server e2e"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
