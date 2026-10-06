@@ -15,6 +15,8 @@ interface RoomContextType {
   joinRoom: (roomCode: string, playerName: string, avatar: string) => Promise<RoomState>;
   leaveRoom: () => void;
   startGame: () => void;
+  returnToLobby: () => void;
+  playAgain: (config?: PuzzleConfig) => void;
   updateConfig: (config: PuzzleConfig, roomCodeOverride?: string) => void;
   sendChatMessage: (text: string) => void;
   clearError: () => void;
@@ -208,6 +210,24 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const returnToLobby = () => {
+    if (room) {
+      console.log('[RoomContext] 🔄 returnToLobby emitting for room:', room.code);
+      socket.emit('return_to_lobby', { roomCode: room.code });
+    } else {
+      console.warn('[RoomContext] ⚠️ returnToLobby called but no room set');
+    }
+  };
+
+  const playAgain = (config?: PuzzleConfig) => {
+    if (room) {
+      console.log('[RoomContext] 🎮 playAgain emitting for room:', room.code);
+      socket.emit('play_again', { roomCode: room.code, config });
+    } else {
+      console.warn('[RoomContext] ⚠️ playAgain called but no room set');
+    }
+  };
+
   const updateConfig = (config: PuzzleConfig, roomCodeOverride?: string) => {
     const code = roomCodeOverride || room?.code;
     if (code) {
@@ -238,6 +258,8 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
         joinRoom,
         leaveRoom,
         startGame,
+        returnToLobby,
+        playAgain,
         updateConfig,
         sendChatMessage,
         clearError,

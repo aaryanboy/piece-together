@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useRoom } from "@/context/RoomContext";
 import { usePuzzleState } from "@/hooks/usePuzzleState";
 import { drawPiecePath } from "@/lib/puzzleGenerator";
+import { PRESET_IMAGES, DIFFICULTY_PRESETS } from "@/lib/constants";
 import { PuzzleConfig, PuzzlePieceData } from "@/types/puzzle";
 import { Player } from "@/types/room";
 
@@ -73,7 +75,9 @@ const LIGHT_THEME: ThemeColors = {
 };
 
 export default function RoomPage() {
-  const { room, socket, player } = useRoom();
+  const { room, socket, player, returnToLobby, playAgain, leaveRoom, updateConfig } = useRoom();
+  const router = useRouter();
+  const [showLobbySettings, setShowLobbySettings] = useState(false);
 
   const {
     pieces,
@@ -678,6 +682,54 @@ export default function RoomPage() {
     }
   };
 
+  const handleReturnToLobby = () => {
+    returnToLobby();
+  };
+
+  const handlePlayNextPuzzle = () => {
+    if (!room?.config) return;
+    const currentImgUrl = room.config.imageUrl;
+    const currentIndex = PRESET_IMAGES.findIndex((img) => img.url === currentImgUrl);
+    const nextIndex = (currentIndex + 1) % PRESET_IMAGES.length;
+    const nextImage = PRESET_IMAGES[nextIndex];
+
+    const nextConfig: PuzzleConfig = {
+      ...room.config,
+      imageUrl: nextImage.url,
+      imageTitle: nextImage.title,
+    };
+    playAgain(nextConfig);
+  };
+
+  const handleLeaveGroup = () => {
+    const confirmLeave = window.confirm("Are you sure you want to leave the room?");
+    if (confirmLeave) {
+      leaveRoom();
+      router.push("/");
+    }
+  };
+
+  const handleSelectImage = (img: typeof PRESET_IMAGES[0]) => {
+    if (!room?.config || !isHost) return;
+    const newConfig: PuzzleConfig = {
+      ...room.config,
+      imageUrl: img.url,
+      imageTitle: img.title,
+    };
+    updateConfig(newConfig);
+  };
+
+  const handleSelectDifficulty = (diff: typeof DIFFICULTY_PRESETS[0]) => {
+    if (!room?.config || !isHost) return;
+    const newConfig: PuzzleConfig = {
+      ...room.config,
+      rows: diff.rows,
+      cols: diff.cols,
+      totalPieces: diff.total,
+    };
+    updateConfig(newConfig);
+  };
+
   const leaderboard = useMemo(() => {
     if (!room) return [];
     
@@ -750,15 +802,23 @@ export default function RoomPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F1720]/95 backdrop-blur-md overflow-y-auto">
           <div className="flex flex-col items-center text-center w-full max-w-lg rounded-3xl border border-[#26364A] bg-[#192533] p-6 sm:p-8 shadow-2xl my-auto">
             {/* Top Game Logo */}
-            <Link href="/" className="flex items-center gap-2 mb-6 hover:scale-105 transition-transform">
-              <span className="text-3xl">🧩</span>
-              <span className="font-display text-xl font-bold tracking-wide text-[#F3F4F6]">
-                Piece Together
-              </span>
-            </Link>
+            <div className="flex items-center justify-between w-full mb-4">
+              <Link href="/" className="flex items-center gap-2 hover:scale-105 transition-transform">
+                <span className="text-3xl">🧩</span>
+                <span className="font-display text-xl font-bold tracking-wide text-[#F3F4F6]">
+                  Piece Together
+                </span>
+              </Link>
+              <button
+                onClick={handleLeaveGroup}
+                className="text-xs font-semibold text-[#9CA3AF] hover:text-red-400 px-3 py-1.5 rounded-xl border border-white/5 hover:border-red-500/30 transition-all"
+              >
+                Leave Room
+              </button>
+            </div>
 
             {/* Room Code Card */}
-            <div className="w-full rounded-2xl border border-[#26364A] bg-[#0F1720] p-4 mb-6">
+            <div className="w-full rounded-2xl border border-[#26364A] bg-[#0F1720] p-4 mb-5">
               <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF]">Room Code</span>
               <div className="flex items-center justify-center gap-3 mt-1">
                 <span className="font-mono text-4xl font-extrabold text-[#F59E0B] tracking-[0.25em]">
@@ -773,22 +833,76 @@ export default function RoomPage() {
               </div>
             </div>
 
-            {/* Puzzle Details Summary */}
+            {/* Puzzle Details Summary & Host Customization */}
             {room?.config && (
-              <div className="w-full flex items-center gap-4 rounded-2xl border border-[#26364A] bg-[#16222F] p-3 mb-6">
-                <div className="h-16 w-24 rounded-xl overflow-hidden border border-[#26364A] shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={room.config.imageUrl} alt="Puzzle" className="h-full w-full object-cover" />
+              <div className="w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-3 mb-5">
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-24 rounded-xl overflow-hidden border border-[#26364A] shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={room.config.imageUrl} alt="Puzzle" className="h-full w-full object-cover" />
+                  </div>
+                  <div className="text-left truncate flex-1">
+                    <h3 className="font-bold text-sm text-[#F3F4F6] truncate">{room.config.imageTitle}</h3>
+                    <p className="text-xs text-[#9CA3AF] mt-0.5">{room.config.cols}×{room.config.rows} ({room.config.totalPieces} Pieces)</p>
+                  </div>
+                  {isHost && (
+                    <button
+                      onClick={() => setShowLobbySettings((v) => !v)}
+                      className="px-2.5 py-1.5 rounded-lg border border-[#26364A] bg-[#0F1720] text-xs font-bold text-[#F59E0B] hover:border-[#F59E0B]/50 transition-all shrink-0"
+                    >
+                      {showLobbySettings ? "Done" : "Change"}
+                    </button>
+                  )}
                 </div>
-                <div className="text-left truncate">
-                  <h3 className="font-bold text-sm text-[#F3F4F6] truncate">{room.config.imageTitle}</h3>
-                  <p className="text-xs text-[#9CA3AF] mt-0.5">{room.config.cols}×{room.config.rows} ({room.config.totalPieces} Pieces)</p>
-                </div>
+
+                {/* Host Puzzle Settings Dropdown */}
+                {isHost && showLobbySettings && (
+                  <div className="mt-3 pt-3 border-t border-[#26364A] text-left animate-in fade-in duration-200">
+                    <span className="text-[11px] uppercase font-bold tracking-wider text-[#9CA3AF] block mb-2">Select Image</span>
+                    <div className="grid grid-cols-3 gap-2 mb-3 max-h-32 overflow-y-auto pr-1">
+                      {PRESET_IMAGES.map((img) => (
+                        <button
+                          key={img.id}
+                          onClick={() => handleSelectImage(img)}
+                          className={`relative rounded-xl overflow-hidden border aspect-video transition-all ${
+                            room.config?.imageUrl === img.url
+                              ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/50 scale-[1.02]"
+                              : "border-[#26364A] opacity-70 hover:opacity-100"
+                          }`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img.thumbnail} alt={img.title} className="h-full w-full object-cover" />
+                          <div className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-[9px] font-bold text-white truncate text-center">
+                            {img.title}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    <span className="text-[11px] uppercase font-bold tracking-wider text-[#9CA3AF] block mb-2">Select Difficulty</span>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                      {DIFFICULTY_PRESETS.map((d) => (
+                        <button
+                          key={d.label}
+                          onClick={() => handleSelectDifficulty(d)}
+                          className={`py-1.5 px-2 rounded-lg border text-center text-xs transition-all ${
+                            room.config?.totalPieces === d.total
+                              ? "bg-[#F59E0B] border-[#F59E0B] text-black font-extrabold shadow-sm"
+                              : "bg-[#0F1720] border-[#26364A] text-[#9CA3AF] hover:text-white hover:border-[#3E526A]"
+                          }`}
+                        >
+                          <div className="font-bold">{d.total} pcs</div>
+                          <div className="text-[9px] opacity-80">{d.rows}×{d.cols}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {/* Game Mode Selector */}
-            <div className="w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-4 mb-6 text-left">
+            <div className="w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-4 mb-5 text-left">
               <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF] block mb-2.5">Game Mode</span>
               <div className="grid grid-cols-2 gap-2.5">
                 <button
@@ -796,7 +910,7 @@ export default function RoomPage() {
                   disabled={!isHost || room.status !== 'lobby'}
                   className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
                     room.mode === 'cooperative' || !room.mode
-                      ? 'bg-[#20382E] border-[#34D399] text-white font-bold'
+                      ? 'bg-[#20382E] border-[#34D399] text-white font-bold shadow-md'
                       : 'bg-[#0F1720] border-[#26364A] text-[#9CA3AF] hover:bg-[#16222F]/50'
                   }`}
                 >
@@ -809,7 +923,7 @@ export default function RoomPage() {
                   disabled={!isHost || room.status !== 'lobby'}
                   className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
                     room.mode === 'competitive'
-                      ? 'bg-[#4C3B1C] border-[#F59E0B] text-white font-bold'
+                      ? 'bg-[#4C3B1C] border-[#F59E0B] text-white font-bold shadow-md'
                       : 'bg-[#0F1720] border-[#26364A] text-[#9CA3AF] hover:bg-[#16222F]/50'
                   }`}
                 >
@@ -826,19 +940,22 @@ export default function RoomPage() {
             </div>
 
             {/* Connected Players List */}
-            <div className="w-full mb-8">
+            <div className="w-full mb-6">
               <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">
-                <span>Players</span>
+                <span>Party Members</span>
                 <span>{playerList.length} / {room?.maxPlayers || 6}</span>
               </div>
-              <div className="grid grid-cols-2 gap-2.5 max-h-48 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-2.5 max-h-40 overflow-y-auto pr-1">
                 {playerList.map((p) => (
                   <div key={p.id} className="flex items-center gap-2.5 rounded-xl border border-[#26364A] bg-[#16222F] p-2.5 text-left">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm border border-white/10" style={{ backgroundColor: p.color + "40" }}>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm border border-white/10 shrink-0" style={{ backgroundColor: p.color + "40" }}>
                       {p.avatar}
                     </div>
-                    <div className="truncate text-xs">
-                      <span className="font-semibold text-[#F3F4F6] truncate block">{p.name}</span>
+                    <div className="truncate text-xs flex-1">
+                      <span className="font-semibold text-[#F3F4F6] truncate block">
+                        {p.name}
+                        {p.id === localPlayerId && " (You)"}
+                      </span>
                       {p.isHost && <span className="text-[10px] font-bold text-[#F59E0B]">HOST</span>}
                     </div>
                   </div>
@@ -1403,14 +1520,24 @@ export default function RoomPage() {
       )}
 
       {/* Completion Modal */}
-      {isCompleted && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="flex flex-col items-center text-center rounded-3xl border p-8 shadow-2xl max-w-md w-full animate-in fade-in zoom-in-95 duration-300" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
-            <div className="text-5xl mb-3">🎉</div>
-            <h2 className="text-2xl font-bold tracking-tight mb-1" style={{ color: C.textPrimary }}>Puzzle Completed!</h2>
+      {(room?.status === 'completed' || isCompleted) && !isLobby && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="flex flex-col items-center text-center rounded-3xl border p-6 sm:p-8 shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-300" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
+            <div className="text-5xl mb-3 animate-bounce">🎉</div>
+            <h2 className="text-2xl font-extrabold tracking-tight mb-1" style={{ color: C.textPrimary }}>
+              {room?.mode === 'competitive' ? 'Match Finished!' : 'Puzzle Completed!'}
+            </h2>
+
+            {/* Competitive Results Leaderboard */}
             {room?.mode === 'competitive' ? (
-              <div className="w-full flex flex-col gap-2 mb-6 text-left mt-3">
-                <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF] block border-b pb-1.5 mb-1" style={{ borderColor: C.cardBorder }}>Final Results</span>
+              <div className="w-full flex flex-col gap-2 mb-5 text-left mt-3">
+                {leaderboard.length > 0 && leaderboard[0].result && (
+                  <div className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold mb-1 text-center">
+                    <span>👑</span>
+                    <span>{leaderboard[0].player.name} won the race!</span>
+                  </div>
+                )}
+                <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF] block border-b pb-1.5 mb-1" style={{ borderColor: C.cardBorder }}>Final Standings</span>
                 {leaderboard.map((item, idx) => (
                   <div key={item.player.id} className="flex items-center justify-between text-xs py-1.5 border-b border-white/5 last:border-0">
                     <div className="flex items-center gap-2">
@@ -1435,15 +1562,77 @@ export default function RoomPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm mb-6" style={{ color: C.textMuted }}>
-                Congratulations! You completed the puzzle in <span className="font-semibold font-mono">{completionData ? formatTime(completionData.durationSeconds) : formatTime(elapsed)}</span>.
-              </p>
+              <div className="mb-5 mt-2">
+                <p className="text-sm" style={{ color: C.textMuted }}>
+                  Congratulations! You completed the puzzle in <span className="font-bold font-mono text-amber-400">{completionData ? formatTime(completionData.durationSeconds) : formatTime(elapsed)}</span>.
+                </p>
+              </div>
             )}
-            <div className="flex gap-3 w-full">
-              <Link href="/" className="flex-1 rounded-xl py-3.5 text-sm font-bold text-center text-white shadow-md transition-transform hover:scale-105" style={{ backgroundColor: C.headerGreen }}>
-                Return Home
-              </Link>
+
+            {/* Active Group / Party Status Bar */}
+            <div className="w-full flex items-center justify-between p-3 rounded-2xl bg-[#0F1720] border border-[#26364A] mb-5 text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">👥</span>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-[#F3F4F6]">Party ({playerList.length} Players)</span>
+                  <span className="text-[10px] text-[#9CA3AF]">Group stays together for the next round</span>
+                </div>
+              </div>
+              <div className="flex -space-x-1.5 overflow-hidden">
+                {playerList.slice(0, 5).map((p) => (
+                  <div
+                    key={p.id}
+                    title={p.name}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] border border-black shadow-sm"
+                    style={{ backgroundColor: p.color + '60' }}
+                  >
+                    {p.avatar}
+                  </div>
+                ))}
+              </div>
             </div>
+
+            {/* Host Controls vs Non-Host Waiting Area */}
+            {isHost ? (
+              <div className="flex flex-col gap-2.5 w-full">
+                <div className="grid grid-cols-2 gap-2.5 w-full">
+                  <button
+                    onClick={handleReturnToLobby}
+                    className="flex items-center justify-center gap-1.5 rounded-xl py-3 px-3 text-xs font-extrabold text-white shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    style={{ backgroundColor: C.headerGreen }}
+                  >
+                    <span>🔄</span> Return to Lobby
+                  </button>
+                  <button
+                    onClick={handlePlayNextPuzzle}
+                    className="flex items-center justify-center gap-1.5 rounded-xl py-3 px-3 text-xs font-extrabold text-white shadow-md transition-all hover:scale-[1.02] active:scale-[0.98] bg-[#F59E0B] hover:bg-[#D97706]"
+                  >
+                    <span>⏭️</span> Next Puzzle
+                  </button>
+                </div>
+                <button
+                  onClick={handleLeaveGroup}
+                  className="text-xs font-semibold text-[#9CA3AF] hover:text-red-400 py-1 transition-colors text-center mt-1"
+                >
+                  Leave Room
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 w-full">
+                <div className="w-full rounded-2xl border border-[#26364A] bg-[#16222F]/80 p-3.5 text-center">
+                  <div className="flex items-center justify-center gap-2 text-xs font-bold text-[#F59E0B] animate-pulse">
+                    <span>⏳</span> Waiting for host to pick next game…
+                  </div>
+                  <p className="text-[11px] text-[#9CA3AF] mt-1">You will automatically join the next round together.</p>
+                </div>
+                <button
+                  onClick={handleLeaveGroup}
+                  className="rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 py-2.5 text-xs font-bold text-red-400 transition-all text-center"
+                >
+                  Leave Group
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -33,6 +33,20 @@ export function usePuzzleState() {
   // Track last synced source reference to avoid overwriting optimistic updates
   const [lastSyncedSource, setLastSyncedSource] = useState<PuzzlePieceData[] | null>(null);
 
+  // Track last synced room status for render-time state adjustment (React-recommended pattern)
+  const [prevRoomStatus, setPrevRoomStatus] = useState<string | undefined>(room?.status);
+
+  if (room?.status !== prevRoomStatus) {
+    setPrevRoomStatus(room?.status);
+    if (room?.status === 'lobby') {
+      setIsCompleted(false);
+      setCompletionData(null);
+      setActivePieceId(null);
+      setPieces([]);
+      setLastSyncedSource(null);
+    }
+  }
+
   // Adjust state during render when source reference changes (React-recommended pattern)
   if (sourcePieces && sourcePieces !== lastSyncedSource) {
     setLastSyncedSource(sourcePieces);
@@ -180,12 +194,19 @@ export function usePuzzleState() {
       setCompletionData({ durationSeconds });
     }
 
+    function onGameStarted() {
+      setIsCompleted(false);
+      setCompletionData(null);
+      setActivePieceId(null);
+    }
+
     socket.on('piece_locked', onPieceLocked);
     socket.on('piece_unlocked', onPieceUnlocked);
     socket.on('piece_moved', onPieceMoved);
     socket.on('pieces_snapped', onPiecesSnapped);
     socket.on('snap_rejected', onSnapRejected);
     socket.on('game_completed', onGameCompleted);
+    socket.on('game_started', onGameStarted);
 
     return () => {
       socket.off('piece_locked', onPieceLocked);
@@ -194,6 +215,7 @@ export function usePuzzleState() {
       socket.off('pieces_snapped', onPiecesSnapped);
       socket.off('snap_rejected', onSnapRejected);
       socket.off('game_completed', onGameCompleted);
+      socket.off('game_started', onGameStarted);
     };
   }, [socket, room?.mode]);
 

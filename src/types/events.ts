@@ -9,6 +9,8 @@ export interface ClientToServerEvents {
   start_game: (data: { roomCode: string }) => void;
   change_mode: (data: { roomCode: string; mode: 'cooperative' | 'competitive' }) => void;
   quit_game: (data: { roomCode: string }) => void;
+  return_to_lobby: (data: { roomCode: string }) => void;
+  play_again: (data: { roomCode: string; config?: PuzzleConfig }) => void;
   
   // Gameplay Events
   lock_piece: (data: { roomCode: string; pieceId: number }) => void;

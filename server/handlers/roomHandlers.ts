@@ -10,6 +10,95 @@ import { PuzzleConfig } from '../../src/types/puzzle';
 // Tracks active player disconnect grace period timeouts (stable playerId -> Timeout ID)
 export const activeDisconnectTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
+export function startGameForRoom(io: Server, room: RoomState, upperCode: string) {
+  if (!room.config) return;
+
+  room.status = 'playing';
+  room.startedAt = Date.now();
+  room.completedAt = null;
+  room.elapsedSeconds = undefined;
+
+  // Clear spectator status for all connected active players for the new round
+  for (const pid of Object.keys(room.players)) {
+    room.players[pid].isSpectator = false;
+  }
+
+  if (room.mode === 'competitive') {
+    room.playerPieces = {};
+    room.competitiveResults = {};
+    room.quitPlayers = [];
+
+    // Generate a separate board pieces set for each active non-spectator player
+    const basePieces = generatePuzzlePieces(room.config);
+    
+    for (const pid of Object.keys(room.players)) {
+      const p = room.players[pid];
+      if (p.isSpectator) continue;
+      
+      // Provide unique scattered coords but keeping the same edge structures for fairness
+      const pieceWidth = room.config.boardWidth / room.config.cols;
+      const pieceHeight = room.config.boardHeight / room.config.rows;
+      room.playerPieces[pid] = basePieces.map(piece => {
+        const scatterZone = Math.floor(Math.random() * 4);
+        let currentX = piece.targetX;
+        let currentY = piece.targetY;
+
+        if (scatterZone === 0) {
+          currentX = -Math.random() * 300 - pieceWidth - 20;
+          currentY = Math.random() * (room.config!.boardHeight + 200) - 100;
+        } else if (scatterZone === 1) {
+          currentX = room.config!.boardWidth + 40 + Math.random() * 300;
+          currentY = Math.random() * (room.config!.boardHeight + 200) - 100;
+        } else if (scatterZone === 2) {
+          currentX = Math.random() * (room.config!.boardWidth + 200) - 100;
+          currentY = -Math.random() * 200 - pieceHeight - 50;
+        } else {
+          currentX = Math.random() * (room.config!.boardWidth + 200) - 100;
+          currentY = room.config!.boardHeight + 40 + Math.random() * 200;
+        }
+
+        return {
+          ...piece,
+          currentX,
+          currentY,
+          isPlaced: false,
+          lockedBy: null,
+          groupId: piece.id
+        };
+      });
+    }
+    room.pieces = []; // Global pieces not used in competitive mode
+    console.log(`[Server] ✅ Competitive game started in room ${upperCode}`);
+
+    // Emit game_started custom pieces specifically to each player
+    for (const pid of Object.keys(room.players)) {
+      const p = room.players[pid];
+      const playerSocket = io.sockets.sockets.get(p.socketId);
+      if (playerSocket) {
+        playerSocket.emit('game_started', {
+          config: room.config,
+          pieces: p.isSpectator ? [] : (room.playerPieces[pid] || []),
+          startedAt: room.startedAt,
+        });
+      }
+    }
+  } else {
+    // Cooperative mode - single shared pieces set
+    room.pieces = generatePuzzlePieces(room.config);
+    console.log(`[Server] ✅ Cooperative game started in room ${upperCode}: ${room.pieces.length} pieces`);
+    
+    io.to(upperCode).emit('game_started', {
+      config: room.config,
+      pieces: room.pieces,
+      startedAt: room.startedAt,
+    });
+  }
+
+  roomStore.setRoom(upperCode, room);
+  dbStore.saveRoom(room);
+  io.to(upperCode).emit('room_updated', room);
+}
+
 export function registerRoomHandlers(io: Server, socket: Socket) {
   // CREATE ROOM
   socket.on('create_room', ({ playerName, avatar, maxPlayers, playerId }, callback) => {
@@ -190,85 +279,84 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
       return;
     }
 
-    room.status = 'playing';
-    room.startedAt = Date.now();
-    room.completedAt = null;
+    startGameForRoom(io, room, upperCode);
+  });
 
-    if (room.mode === 'competitive') {
-      room.playerPieces = {};
-      room.competitiveResults = {};
-      room.quitPlayers = [];
+  // PLAY AGAIN / REMATCH
+  socket.on('play_again', ({ roomCode, config }) => {
+    const upperCode = roomCode.toUpperCase();
+    console.log(`[Server] play_again from socket ${socket.id}: room=${upperCode}`);
+    const room = roomStore.getRoom(upperCode);
+    if (!room) return;
 
-      // Generate a separate board pieces set for each active non-spectator player
-      const basePieces = generatePuzzlePieces(room.config);
-      
-      for (const pid of Object.keys(room.players)) {
-        const p = room.players[pid];
-        if (p.isSpectator) continue;
-        
-        // Provide unique scattered coords but keeping the same edge structures for fairness
-        room.playerPieces[pid] = basePieces.map(piece => {
-          // Re-scatter slightly per-player so it's a scrambler race
-          const pieceWidth = room.config!.boardWidth / room.config!.cols;
-          const pieceHeight = room.config!.boardHeight / room.config!.rows;
-          const scatterZone = Math.floor(Math.random() * 4);
-          let currentX = piece.targetX;
-          let currentY = piece.targetY;
-
-          if (scatterZone === 0) {
-            currentX = -Math.random() * 300 - pieceWidth - 20;
-            currentY = Math.random() * (room.config!.boardHeight + 200) - 100;
-          } else if (scatterZone === 1) {
-            currentX = room.config!.boardWidth + 40 + Math.random() * 300;
-            currentY = Math.random() * (room.config!.boardHeight + 200) - 100;
-          } else if (scatterZone === 2) {
-            currentX = Math.random() * (room.config!.boardWidth + 200) - 100;
-            currentY = -Math.random() * 200 - pieceHeight - 50;
-          } else {
-            currentX = Math.random() * (room.config!.boardWidth + 200) - 100;
-            currentY = room.config!.boardHeight + 40 + Math.random() * 200;
-          }
-
-          return {
-            ...piece,
-            currentX,
-            currentY,
-            isPlaced: false,
-            lockedBy: null,
-            groupId: piece.id
-          };
-        });
-      }
-      room.pieces = []; // Global pieces not used in competitive mode
-      console.log(`[Server] ✅ Competitive game started in room ${upperCode}`);
-
-      // Emit game_started custom pieces specifically to each player
-      for (const pid of Object.keys(room.players)) {
-        const p = room.players[pid];
-        const playerSocket = io.sockets.sockets.get(p.socketId);
-        if (playerSocket) {
-          playerSocket.emit('game_started', {
-            config: room.config,
-            pieces: p.isSpectator ? [] : (room.playerPieces[pid] || []),
-            startedAt: room.startedAt,
-          });
-        }
-      }
-    } else {
-      // Cooperative mode - single shared pieces set
-      room.pieces = generatePuzzlePieces(room.config);
-      console.log(`[Server] ✅ Cooperative game started in room ${upperCode}: ${room.pieces.length} pieces`);
-      
-      io.to(upperCode).emit('game_started', {
-        config: room.config,
-        pieces: room.pieces,
-        startedAt: room.startedAt,
-      });
+    const hostPlayer = Object.values(room.players).find(p => p.socketId === socket.id);
+    if (!hostPlayer || !hostPlayer.isHost) {
+      console.warn(`[Server] ⚠️ play_again rejected: sender is not room host`);
+      return;
     }
+
+    if (config) {
+      room.config = config;
+    }
+
+    const systemMessage = {
+      id: `sys-${Date.now()}`,
+      senderId: 'system',
+      senderName: 'System',
+      senderColor: '#888',
+      text: `🎮 Host started a new puzzle round!`,
+      timestamp: Date.now(),
+      system: true,
+    };
+    room.chat.push(systemMessage);
+    io.to(upperCode).emit('chat_message', systemMessage);
+
+    startGameForRoom(io, room, upperCode);
+  });
+
+  // RETURN TO LOBBY
+  socket.on('return_to_lobby', ({ roomCode }) => {
+    const upperCode = roomCode.toUpperCase();
+    console.log(`[Server] return_to_lobby from socket ${socket.id}: room=${upperCode}`);
+    const room = roomStore.getRoom(upperCode);
+    if (!room) return;
+
+    const hostPlayer = Object.values(room.players).find(p => p.socketId === socket.id);
+    if (!hostPlayer || !hostPlayer.isHost) {
+      console.warn(`[Server] ⚠️ return_to_lobby rejected: sender is not room host`);
+      return;
+    }
+
+    room.status = 'lobby';
+    room.startedAt = null;
+    room.completedAt = null;
+    room.elapsedSeconds = undefined;
+    room.pieces = [];
+    room.playerPieces = {};
+    room.competitiveResults = {};
+    room.quitPlayers = [];
+
+    // Reset spectator flag so all connected players are in the lobby ready to play
+    for (const pid of Object.keys(room.players)) {
+      room.players[pid].isSpectator = false;
+    }
+
+    const systemMessage = {
+      id: `sys-${Date.now()}`,
+      senderId: 'system',
+      senderName: 'System',
+      senderColor: '#888',
+      text: `🔄 Host returned the group to the lobby for the next game.`,
+      timestamp: Date.now(),
+      system: true,
+    };
+    room.chat.push(systemMessage);
+    io.to(upperCode).emit('chat_message', systemMessage);
 
     roomStore.setRoom(upperCode, room);
     dbStore.saveRoom(room);
     io.to(upperCode).emit('room_updated', room);
+    console.log(`[Server] ✅ Room ${upperCode} returned to lobby with ${Object.keys(room.players).length} players`);
   });
 
   // UPDATE SETTINGS
