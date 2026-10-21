@@ -2,25 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useRoom } from "@/context/RoomContext";
-import { PRESET_IMAGES, DIFFICULTY_PRESETS } from "@/lib/constants";
-import { PuzzleConfig } from "@/types/puzzle";
-
-const DIFFICULTY_NAMES = ["Easy", "Medium", "Hard", "Extreme", "Insane"];
-
-function difficultyName(index: number) {
-  return DIFFICULTY_NAMES[index] ?? DIFFICULTY_NAMES[DIFFICULTY_NAMES.length - 1];
-}
+import BrandLogo from "@/components/BrandLogo";
 
 function CreateRoomForm() {
   const router = useRouter();
-  const { createRoom, updateConfig, isConnected } = useRoom();
+  const { createRoom, isConnected } = useRoom();
 
   const [playerName, setPlayerName] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(6);
-  const [selectedImage, setSelectedImage] = useState(PRESET_IMAGES[0]);
-  const [selectedDifficulty, setSelectedDifficulty] = useState(DIFFICULTY_PRESETS[1]);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,21 +24,7 @@ function CreateRoomForm() {
     setError(null);
 
     try {
-      const roomCode = await createRoom(playerName.trim(), "🧩", maxPlayers);
-
-      const config: PuzzleConfig = {
-        rows: selectedDifficulty.rows,
-        cols: selectedDifficulty.cols,
-        totalPieces: selectedDifficulty.total,
-        imageUrl: selectedImage.url,
-        imageTitle: selectedImage.title,
-        imageWidth: 1200,
-        imageHeight: 800,
-        boardWidth: 800,
-        boardHeight: 560,
-      };
-
-      updateConfig(config, roomCode);
+      const roomCode = await createRoom(playerName.trim(), playerName.trim().charAt(0).toUpperCase(), maxPlayers);
       router.push(`/room/${roomCode}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create room");
@@ -63,15 +39,10 @@ function CreateRoomForm() {
       <div className="pointer-events-none fixed -bottom-24 -right-16 h-95 w-95 rounded-full bg-[#F4B942]/8 blur-[100px]" />
 
       {/* Floating brand link */}
-      <Link
-        href="/"
+      <BrandLogo
         className="group absolute left-5 top-5 z-20 flex items-center gap-2 sm:left-8 sm:top-6"
-      >
-        <span className="text-2xl transition-transform group-hover:scale-110">🧩</span>
-        <span className="font-display text-base font-bold tracking-wide text-[#F5EFE0]">
-          Piece Together
-        </span>
-      </Link>
+        markClassName="h-7 w-7 transition-transform group-hover:scale-110"
+      />
 
       {/* Connection status pill */}
       <div className="absolute right-5 top-5 z-20 flex items-center gap-2 sm:right-8 sm:top-6">
@@ -94,7 +65,7 @@ function CreateRoomForm() {
               Set up your <span className="italic text-[#FF6B4A]">room</span>
             </h1>
             <p className="mt-2 text-sm text-[#A8ADC4]">
-              Choose jigsaw, Sudoku, or Minesweeper and your multiplayer mode in the room lobby.
+              Set your name here, then choose a game, image, and mode in the room lobby.
             </p>
           </div>
 
@@ -104,126 +75,73 @@ function CreateRoomForm() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-[1.15fr_0.85fr] md:gap-10">
-            {/* Left Column: Player Identity & Image Selector */}
-            <div className="flex flex-col gap-6">
-              <div>
-                <label htmlFor="player-name" className="section-label">Your Name</label>
+          <div className="mx-auto grid w-full max-w-2xl grid-cols-1 items-end gap-6 sm:grid-cols-[1fr_auto]">
+            <div>
+              <label htmlFor="player-name" className="section-label">Your Name</label>
+              <input
+                id="player-name"
+                type="text"
+                placeholder="Your display name…"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                className="field-minimal"
+                maxLength={20}
+              />
+            </div>
+
+            <div>
+              <label className="section-label">Max Players</label>
+              <div className="stepper">
+                <button
+                  type="button"
+                  onClick={() => setMaxPlayers((n) => Math.max(2, n - 1))}
+                  disabled={maxPlayers <= 2}
+                  className="stepper-btn"
+                  aria-label="Decrease max players"
+                >
+                  –
+                </button>
                 <input
-                  id="player-name"
-                  type="text"
-                  placeholder="Your display name…"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  className="field-minimal"
-                  maxLength={20}
+                  type="number"
+                  inputMode="numeric"
+                  value={maxPlayers}
+                  min={2}
+                  max={12}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") {
+                      setMaxPlayers(2);
+                      return;
+                    }
+                    const n = parseInt(raw, 10);
+                    if (!Number.isNaN(n)) setMaxPlayers(n);
+                  }}
+                  onBlur={() => setMaxPlayers((n) => Math.min(12, Math.max(2, n || 2)))}
+                  className="stepper-input"
+                  aria-label="Max players"
                 />
-              </div>
-
-              <div>
-                <label className="section-label">Choose Puzzle Image</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {PRESET_IMAGES.map((img) => {
-                    const active = selectedImage.id === img.id;
-                    return (
-                      <button
-                        key={img.id}
-                        onClick={() => setSelectedImage(img)}
-                        className="thumb"
-                        data-active={active}
-                        aria-label={img.title}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={img.thumbnail} alt={img.title} className="h-full w-full object-cover" />
-                        {active && (
-                          <span className="thumb-check">
-                            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                              <path d="M1 4L3.5 6.5L9 1" stroke="#0F1C2E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setMaxPlayers((n) => Math.min(12, n + 1))}
+                  disabled={maxPlayers >= 12}
+                  className="stepper-btn"
+                  aria-label="Increase max players"
+                >
+                  +
+                </button>
+                <span className="jb-mono ml-2 text-xs uppercase tracking-wider text-[#8A96AE]">
+                  players
+                </span>
               </div>
             </div>
 
-            {/* Right Column: Settings & Big Create Button */}
-            <div className="flex flex-col gap-6 justify-between">
-              <div className="flex flex-col gap-6">
-                <div>
-                  <label className="section-label">Difficulty</label>
-                  <div className="flex flex-wrap gap-2.5">
-                    {DIFFICULTY_PRESETS.map((d, i) => (
-                      <button
-                        key={d.label}
-                        onClick={() => setSelectedDifficulty(d)}
-                        className="chip"
-                        data-active={selectedDifficulty.label === d.label}
-                      >
-                        {difficultyName(i)} <span className="opacity-60">· {d.total} pcs</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="section-label">Max Players</label>
-                  <div className="stepper">
-                    <button
-                      type="button"
-                      onClick={() => setMaxPlayers((n) => Math.max(2, n - 1))}
-                      disabled={maxPlayers <= 2}
-                      className="stepper-btn"
-                      aria-label="Decrease max players"
-                    >
-                      –
-                    </button>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={maxPlayers}
-                      min={2}
-                      max={12}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        if (raw === "") {
-                          setMaxPlayers(2);
-                          return;
-                        }
-                        const n = parseInt(raw, 10);
-                        if (!Number.isNaN(n)) setMaxPlayers(n);
-                      }}
-                      onBlur={() => setMaxPlayers((n) => Math.min(12, Math.max(2, n || 2)))}
-                      className="stepper-input"
-                      aria-label="Max players"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setMaxPlayers((n) => Math.min(12, n + 1))}
-                      disabled={maxPlayers >= 12}
-                      className="stepper-btn"
-                      aria-label="Increase max players"
-                    >
-                      +
-                    </button>
-                    <span className="jb-mono ml-2 text-xs uppercase tracking-wider text-[#8A96AE]">
-                      players
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Large prominent create button */}
-              <button
-                onClick={handleCreate}
-                disabled={isCreating || !isConnected}
-                className="btn-piece btn-piece-primary w-full justify-center py-4 text-base font-bold shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isCreating ? "Creating Room…" : "Create & Start Room"}
-              </button>
-            </div>
+            <button
+              onClick={handleCreate}
+              disabled={isCreating || !isConnected}
+              className="btn-piece btn-piece-primary w-full justify-center py-4 text-base font-bold shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+            >
+              {isCreating ? "Creating Room…" : "Create Room"}
+            </button>
           </div>
         </div>
       </div>
@@ -255,55 +173,6 @@ function CreateRoomForm() {
         }
         .field-minimal::placeholder { color: #5C6A85; }
         .field-minimal:focus { outline: none; border-color: #FF6B4A; background: rgba(255,255,255,0.06); }
-
-        .thumb {
-          position: relative;
-          border-radius: 14px;
-          overflow: hidden;
-          aspect-ratio: 1 / 1;
-          border: 2px solid transparent;
-          opacity: 0.65;
-          transition: transform 0.2s ease, opacity 0.2s ease, border-color 0.2s ease;
-        }
-        .thumb:hover { opacity: 0.95; }
-        .thumb[data-active="true"] {
-          opacity: 1;
-          border-color: #FF6B4A;
-          box-shadow: 0 6px 18px -8px rgba(255,107,74,0.55);
-        }
-
-        .thumb-check {
-          position: absolute;
-          top: 6px;
-          right: 6px;
-          width: 18px;
-          height: 18px;
-          border-radius: 50%;
-          background: #F4B942;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .chip {
-          border-radius: 999px;
-          padding: 0.65rem 1.2rem;
-          font-size: 0.95rem;
-          font-weight: 500;
-          background: transparent;
-          border: 1px solid rgba(245,239,224,0.16);
-          color: #A8ADC4;
-          transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-          display: inline-flex;
-          align-items: center;
-        }
-        .chip:hover { color: #F5EFE0; border-color: rgba(245,239,224,0.32); }
-        .chip[data-active="true"] {
-          background: rgba(255,107,74,0.14);
-          border-color: #FF6B4A;
-          color: #F5EFE0;
-          font-weight: 600;
-        }
 
         .stepper {
           display: inline-flex;

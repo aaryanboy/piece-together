@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
+import BrandLogo, { BrandMark } from "@/components/BrandLogo";
 import { drawPiecePath, generatePuzzlePieces } from "@/lib/puzzleGenerator";
 import { PRESET_IMAGES, DIFFICULTY_PRESETS, SNAP_DISTANCE_THRESHOLD } from "@/lib/constants";
 import { PuzzleConfig, PuzzlePieceData } from "@/types/puzzle";
@@ -693,10 +694,10 @@ export default function SoloPage() {
         <div className="pointer-events-none fixed -left-24 -top-32 h-105 w-105 rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
         <div className="pointer-events-none fixed -bottom-24 -right-16 h-95 w-95 rounded-full bg-[#F4B942]/8 blur-[100px]" />
 
-        <Link href="/" className="group absolute left-5 top-5 z-20 flex items-center gap-2 sm:left-8 sm:top-6">
-          <span className="text-2xl transition-transform group-hover:scale-110">🧩</span>
-          <span className="font-display text-base font-bold tracking-wide text-[#F5EFE0]">Piece Together</span>
-        </Link>
+        <BrandLogo
+          className="group absolute left-5 top-5 z-20"
+          markClassName="h-7 w-7 transition-transform group-hover:scale-110"
+        />
 
         <div className="relative z-10 flex flex-1 items-center justify-center px-4 pt-24 sm:px-10 md:pt-16">
           <div className="w-full max-w-4xl">
@@ -868,13 +869,12 @@ export default function SoloPage() {
           <button onClick={() => setMobileStatsOpen(false)} className="text-sm font-bold px-2 py-1">✕</button>
         </div>
 
-        <Link href="/" className="flex items-center gap-2 rounded-2xl p-4 shadow-sm transition-transform hover:scale-[1.02]" style={{ backgroundColor: C.headerGreen, color: C.headerText }}>
-          <span className="text-2xl">🧩</span>
-          <div className="flex flex-col text-left">
-            <span className="font-display text-base font-bold tracking-wide leading-none">Piece Together</span>
-            <span className="text-[10px] font-bold text-[#F59E0B] mt-0.5">SOLO MODE</span>
-          </div>
-        </Link>
+        <BrandLogo
+          className="rounded-2xl p-4 shadow-sm transition-transform hover:scale-[1.02]"
+          markClassName="h-7 w-7 shrink-0"
+          labelClassName="font-display text-base font-bold tracking-wide leading-none"
+          style={{ backgroundColor: C.headerGreen, color: C.headerText }}
+        />
 
         <div className="flex items-center justify-between rounded-2xl border p-4 shadow-sm" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
           <div>
@@ -884,7 +884,7 @@ export default function SoloPage() {
             </div>
           </div>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg" style={{ backgroundColor: C.pageBg, color: C.textPrimary }}>
-            🧩
+            <BrandMark className="h-6 w-6" />
           </div>
         </div>
 

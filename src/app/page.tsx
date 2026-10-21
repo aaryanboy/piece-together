@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandMark } from "@/components/BrandLogo";
 
 /**
  * Deterministic mosaic layout (no Math.random — keeps SSR/CSR markup identical).
@@ -156,7 +157,7 @@ export default function LandingPage() {
 
         <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
           {[
-            { icon: "🧩", title: "Jigsaw", description: "Trade ideas, find the edges, and watch the picture come together.", accent: "#FF6B4A", tag: "MAKE IT FIT" },
+            { icon: "jigsaw", title: "Jigsaw", description: "Trade ideas, find the edges, and watch the picture come together.", accent: "#FF6B4A", tag: "MAKE IT FIT" },
             { icon: "🔢", title: "Sudoku", description: "Share the logic or race to fill every square without a conflict.", accent: "#73D5C1", tag: "THINK IT THROUGH" },
             { icon: "💣", title: "Minesweeper", description: "Read the clues, mark the danger, and uncover the safe path.", accent: "#F4B942", tag: "TRUST YOUR GUT" },
           ].map((game) => (
@@ -165,7 +166,9 @@ export default function LandingPage() {
               className="game-card rounded-2xl border border-white/10 bg-[#17283D]/85 p-5"
             >
               <div className="mb-5 flex items-start justify-between">
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F1C2E] text-2xl shadow-inner">{game.icon}</span>
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F1C2E] text-2xl shadow-inner">
+                  {game.icon === "jigsaw" ? <BrandMark className="h-7 w-7" /> : game.icon}
+                </span>
                 <span className="jb-mono rounded-full border border-white/10 px-2.5 py-1 text-[9px] tracking-wider" style={{ color: game.accent }}>{game.tag}</span>
               </div>
               <h3 className="font-display text-xl font-bold">{game.title}</h3>

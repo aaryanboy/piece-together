@@ -10,6 +10,7 @@ import { PRESET_IMAGES, DIFFICULTY_PRESETS } from "@/lib/constants";
 import { PuzzleConfig, PuzzlePieceData } from "@/types/puzzle";
 import { GameDifficulty, Player, RoomGame } from "@/types/room";
 import MiniGameRoom from "@/components/MiniGameRoom";
+import BrandLogo, { BrandMark } from "@/components/BrandLogo";
 
 /* ──────────────────────────────────────────────────────────
  * THEME COLOR PALETTES & TYPE DEFINITION
@@ -786,7 +787,7 @@ export default function RoomPage() {
     return (
       <div className="flex h-dvh w-full items-center justify-center" style={{ backgroundColor: "#0F1720" }}>
         <div className="flex flex-col items-center gap-4 text-center">
-          <span className="text-5xl animate-pulse">🧩</span>
+          <BrandMark className="h-12 w-12 animate-pulse" />
           <span className="text-lg font-bold text-[#F3F4F6]">Connecting to room…</span>
           <span className="text-sm text-[#9CA3AF]">Please wait while we sync with the server.</span>
         </div>
@@ -808,12 +809,11 @@ export default function RoomPage() {
           <div className="flex flex-col items-center text-center w-full max-w-lg rounded-3xl border border-[#26364A] bg-[#192533] p-6 sm:p-8 shadow-2xl my-auto">
             {/* Top Game Logo */}
             <div className="flex items-center justify-between w-full mb-4">
-              <Link href="/" className="flex items-center gap-2 hover:scale-105 transition-transform">
-                <span className="text-3xl">🧩</span>
-                <span className="font-display text-xl font-bold tracking-wide text-[#F3F4F6]">
-                  Piece Together
-                </span>
-              </Link>
+              <BrandLogo
+                className="transition-transform hover:scale-105"
+                markClassName="h-8 w-8"
+                labelClassName="font-display text-xl font-bold tracking-wide text-[#F3F4F6]"
+              />
               <button
                 onClick={handleLeaveGroup}
                 className="text-xs font-semibold text-[#9CA3AF] hover:text-red-400 px-3 py-1.5 rounded-xl border border-white/5 hover:border-red-500/30 transition-all"
@@ -843,7 +843,7 @@ export default function RoomPage() {
               <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF] block mb-2.5">Choose a Game</span>
               <div className="grid grid-cols-3 gap-2">
                 {([
-                  { id: "jigsaw", icon: "🧩", title: "Jigsaw" },
+                  { id: "jigsaw", icon: null, title: "Jigsaw" },
                   { id: "sudoku", icon: "🔢", title: "Sudoku" },
                   { id: "minesweeper", icon: "💣", title: "Minesweeper" },
                 ] as const).map((game) => (
@@ -859,7 +859,9 @@ export default function RoomPage() {
                         : "border-[#26364A] bg-[#0F1720] text-[#9CA3AF] hover:border-[#667085]"
                     }`}
                   >
-                    <span className="block text-xl">{game.icon}</span>
+                    <span className="flex justify-center text-xl">
+                      {game.id === "jigsaw" ? <BrandMark className="h-6 w-6" /> : game.icon}
+                    </span>
                     <span className="mt-1 block text-[10px] font-bold leading-tight sm:text-xs">{game.title}</span>
                   </button>
                 ))}
@@ -986,7 +988,7 @@ export default function RoomPage() {
                       : 'bg-[#0F1720] border-[#26364A] text-[#9CA3AF] hover:bg-[#16222F]/50'
                   }`}
                 >
-                  <span className="text-xl">🧩</span>
+                  <BrandMark className="h-6 w-6" />
                   <span className="text-xs font-bold mt-1">Play Together</span>
                   <span className="text-[10px] opacity-75 mt-0.5">Shared Board</span>
                 </button>
@@ -1069,12 +1071,12 @@ export default function RoomPage() {
         </div>
 
         {/* Game Brand Logo Header */}
-        <Link href="/" className="flex items-center gap-2 rounded-2xl p-4 shadow-sm transition-transform hover:scale-[1.02]" style={{ backgroundColor: C.headerGreen, color: C.headerText }}>
-          <span className="text-2xl">🧩</span>
-          <div className="flex flex-col text-left">
-            <span className="font-display text-base font-bold tracking-wide leading-none">Piece Together</span>
-          </div>
-        </Link>
+        <BrandLogo
+          className="rounded-2xl p-4 shadow-sm transition-transform hover:scale-[1.02]"
+          markClassName="h-7 w-7 shrink-0"
+          labelClassName="font-display text-base font-bold tracking-wide leading-none"
+          style={{ backgroundColor: C.headerGreen, color: C.headerText }}
+        />
 
         {/* Stats Card: Pieces */}
         <div className="flex items-center justify-between rounded-2xl border p-4 shadow-sm" style={{ backgroundColor: C.cardBg, borderColor: C.cardBorder }}>
@@ -1085,7 +1087,7 @@ export default function RoomPage() {
             </div>
           </div>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl text-lg" style={{ backgroundColor: C.pageBg, color: C.textPrimary }}>
-            🧩
+            <BrandMark className="h-6 w-6" />
           </div>
         </div>
 

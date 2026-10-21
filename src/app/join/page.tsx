@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useRoom } from "@/context/RoomContext";
+import BrandLogo from "@/components/BrandLogo";
 
 function JoinRoomForm() {
   const router = useRouter();
@@ -28,7 +29,7 @@ function JoinRoomForm() {
     setError(null);
 
     try {
-      await joinRoom(roomCode.trim().toUpperCase(), playerName.trim(), "🧩");
+      await joinRoom(roomCode.trim().toUpperCase(), playerName.trim(), playerName.trim().charAt(0).toUpperCase());
       router.push(`/room/${roomCode.trim().toUpperCase()}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to join room");
@@ -43,15 +44,10 @@ function JoinRoomForm() {
       <div className="pointer-events-none fixed -bottom-24 -right-16 h-95 w-95 rounded-full bg-[#F4B942]/8 blur-[100px]" />
 
       {/* Top brand logo */}
-      <Link
-        href="/"
+      <BrandLogo
         className="group absolute left-5 top-5 z-20 flex items-center gap-2 sm:left-8 sm:top-6"
-      >
-        <span className="text-2xl transition-transform group-hover:scale-110">🧩</span>
-        <span className="font-display text-base font-bold tracking-wide text-[#F5EFE0]">
-          Piece Together
-        </span>
-      </Link>
+        markClassName="h-7 w-7 transition-transform group-hover:scale-110"
+      />
 
       {/* Connection status pill */}
       <div className="absolute right-5 top-5 z-20 flex items-center gap-2 sm:right-8 sm:top-6">

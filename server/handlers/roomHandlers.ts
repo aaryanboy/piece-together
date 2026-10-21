@@ -117,7 +117,7 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
         id: playerId, // stable playerId
         socketId: socket.id, // transient socket.id
         name: playerName || 'Puzzle Master',
-        avatar: avatar || '🧩',
+        avatar: avatar || '•',
         color,
         isHost: true,
         cursor: null,
@@ -236,7 +236,7 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
         id: playerId,
         socketId: socket.id,
         name: playerName || `Player ${currentPlayers.length + 1}`,
-        avatar: avatar || '🧩',
+        avatar: avatar || '•',
         color: assignedColor,
         isHost: room.hostId === playerId,
         cursor: null,

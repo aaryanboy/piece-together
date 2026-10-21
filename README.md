@@ -10,6 +10,8 @@ Piece Together is a multiplayer puzzle app for playing with friends in a shared 
 
 The Sudoku and Minesweeper interfaces support touch screens as well as desktop input. Room links are private and excluded from search indexing.
 
+Create a room with your name and player limit, then choose the game, jigsaw image, and game settings from the room lobby.
+
 ## Run locally
 
 Install dependencies:
