@@ -1,4 +1,4 @@
-import { RoomState, Player, ChatMessage } from './room';
+import { RoomState, Player, ChatMessage, MiniGameState, RoomGame, GameDifficulty } from './room';
 import { PuzzleConfig, PuzzlePieceData } from './puzzle';
 
 export interface ClientToServerEvents {
@@ -7,6 +7,8 @@ export interface ClientToServerEvents {
   leave_room: (data: { roomCode: string }) => void;
   update_settings: (data: { roomCode: string; config: PuzzleConfig }) => void;
   start_game: (data: { roomCode: string }) => void;
+  change_game: (data: { roomCode: string; game: RoomGame }) => void;
+  change_game_difficulty: (data: { roomCode: string; difficulty: GameDifficulty }) => void;
   change_mode: (data: { roomCode: string; mode: 'cooperative' | 'competitive' }) => void;
   quit_game: (data: { roomCode: string }) => void;
   return_to_lobby: (data: { roomCode: string }) => void;
@@ -20,6 +22,12 @@ export interface ClientToServerEvents {
   fix_placed_pieces: (data: { roomCode: string }) => void;
   cursor_move: (data: { roomCode: string; x: number; y: number }) => void;
   send_chat: (data: { roomCode: string; text: string }) => void;
+  mini_game_action: (data: {
+    roomCode: string;
+    action:
+      | { type: 'sudoku_set'; row: number; col: number; value: number | null }
+      | { type: 'minesweeper_reveal' | 'minesweeper_flag'; index: number };
+  }) => void;
 }
 
 export interface ServerToClientEvents {
@@ -27,6 +35,8 @@ export interface ServerToClientEvents {
   player_joined: (player: Player) => void;
   player_left: (data: { playerId: string; playerName: string }) => void;
   game_started: (data: { config: PuzzleConfig; pieces: PuzzlePieceData[]; startedAt: number }) => void;
+  mini_game_state: (state: MiniGameState) => void;
+  mini_game_error: (data: { message: string }) => void;
   
   // Real-time piece & cursor events
   piece_locked: (data: { pieceId: number; lockedBy: string; lockedByName: string; lockedByColor: string; playerId?: string }) => void;
@@ -41,4 +51,3 @@ export interface ServerToClientEvents {
   chat_message: (message: ChatMessage) => void;
   error_message: (data: { message: string }) => void;
 }
-

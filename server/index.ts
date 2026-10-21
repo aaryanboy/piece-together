@@ -6,6 +6,7 @@ import { roomStore } from './utils/roomStore';
 import { dbStore } from './utils/dbStore';
 import { registerRoomHandlers, handlePlayerDisconnect } from './handlers/roomHandlers';
 import { registerPieceHandlers } from './handlers/pieceHandlers';
+import { registerMiniGameHandlers } from './handlers/miniGameHandlers';
 import { ClientToServerEvents, ServerToClientEvents } from '../src/types/events';
 
 const app = express();
@@ -31,7 +32,16 @@ try {
   for (const room of savedRooms) {
     // Reset transient player status on server restart
     room.players = {};
+    if (room.game && room.game !== 'jigsaw' && room.status !== 'lobby') {
+      room.status = 'lobby';
+      room.startedAt = null;
+      room.completedAt = null;
+      room.elapsedSeconds = undefined;
+      room.competitiveResults = {};
+      room.quitPlayers = [];
+    }
     roomStore.setRoom(room.code, room);
+    dbStore.saveRoom(room);
   }
   console.log(`[Server] Rehydrated ${savedRooms.length} rooms from storage.`);
 } catch (err) {
@@ -52,6 +62,7 @@ io.on('connection', (socket) => {
 
   registerRoomHandlers(io, socket);
   registerPieceHandlers(io, socket);
+  registerMiniGameHandlers(io, socket);
 
   socket.on('disconnect', () => {
     console.log(`[Socket Disconnected] Socket ID: ${socket.id}`);

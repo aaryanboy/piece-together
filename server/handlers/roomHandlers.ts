@@ -6,12 +6,18 @@ import { generatePuzzlePieces } from '../../src/lib/puzzleGenerator';
 import { PLAYER_COLORS, PRESET_IMAGES } from '../../src/lib/constants';
 import { RoomState, Player } from '../../src/types/room';
 import { PuzzleConfig } from '../../src/types/puzzle';
+import { clearMiniGame, sendMiniGameStateToPlayer, startMiniGame } from './miniGameHandlers';
 
 // Tracks active player disconnect grace period timeouts (stable playerId -> Timeout ID)
 export const activeDisconnectTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
 export function startGameForRoom(io: Server, room: RoomState, upperCode: string) {
+  if (room.game && room.game !== 'jigsaw') {
+    startMiniGame(io, room);
+    return;
+  }
   if (!room.config) return;
+  clearMiniGame(upperCode);
 
   room.status = 'playing';
   room.startedAt = Date.now();
@@ -141,6 +147,8 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
         startedAt: null,
         completedAt: null,
         mode: 'cooperative', // default game mode
+        game: 'jigsaw',
+        gameDifficulty: 'medium',
         playerPieces: {},
         competitiveResults: {},
         quitPlayers: [],
@@ -195,6 +203,7 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
 
         socket.join(upperCode);
         io.to(upperCode).emit('room_updated', room);
+        sendMiniGameStateToPlayer(io, room, playerId);
 
         // System message broadcast
         const systemMessage = {
@@ -239,6 +248,7 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
       dbStore.saveRoom(room);
 
       socket.join(upperCode);
+      sendMiniGameStateToPlayer(io, room, playerId);
       socket.to(upperCode).emit('player_joined', newPlayer);
       io.to(upperCode).emit('room_updated', room);
 
@@ -328,6 +338,7 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
     }
 
     room.status = 'lobby';
+    clearMiniGame(upperCode);
     room.startedAt = null;
     room.completedAt = null;
     room.elapsedSeconds = undefined;
@@ -357,6 +368,37 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
     dbStore.saveRoom(room);
     io.to(upperCode).emit('room_updated', room);
     console.log(`[Server] ✅ Room ${upperCode} returned to lobby with ${Object.keys(room.players).length} players`);
+  });
+
+  // CHANGE GAME
+  socket.on('change_game', ({ roomCode, game }) => {
+    const upperCode = roomCode.toUpperCase();
+    const room = roomStore.getRoom(upperCode);
+    if (!room || room.status !== 'lobby') return;
+    const hostPlayer = Object.values(room.players).find((p) => p.socketId === socket.id);
+    if (!hostPlayer || !hostPlayer.isHost) return;
+    if (!['jigsaw', 'sudoku', 'minesweeper'].includes(game)) return;
+    room.game = game;
+    room.gameDifficulty = game === 'sudoku' ? 'medium' : game === 'minesweeper' ? 'beginner' : undefined;
+    roomStore.setRoom(upperCode, room);
+    dbStore.saveRoom(room);
+    io.to(upperCode).emit('room_updated', room);
+  });
+
+  socket.on('change_game_difficulty', ({ roomCode, difficulty }) => {
+    const upperCode = roomCode.toUpperCase();
+    const room = roomStore.getRoom(upperCode);
+    if (!room || room.status !== 'lobby' || room.game === 'jigsaw') return;
+    const hostPlayer = Object.values(room.players).find((p) => p.socketId === socket.id);
+    if (!hostPlayer || !hostPlayer.isHost) return;
+    const validDifficulty = room.game === 'sudoku'
+      ? ['easy', 'medium', 'hard'].includes(difficulty)
+      : ['beginner', 'intermediate', 'expert'].includes(difficulty);
+    if (!validDifficulty) return;
+    room.gameDifficulty = difficulty;
+    roomStore.setRoom(upperCode, room);
+    dbStore.saveRoom(room);
+    io.to(upperCode).emit('room_updated', room);
   });
 
   // UPDATE SETTINGS

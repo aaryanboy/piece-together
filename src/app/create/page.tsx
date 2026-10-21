@@ -91,8 +91,11 @@ function CreateRoomForm() {
               New Room
             </span>
             <h1 className="font-display mt-1.5 text-3xl font-bold leading-tight sm:text-4xl">
-              Set up your <span className="italic text-[#FF6B4A]">puzzle</span>
+              Set up your <span className="italic text-[#FF6B4A]">room</span>
             </h1>
+            <p className="mt-2 text-sm text-[#A8ADC4]">
+              Choose jigsaw, Sudoku, or Minesweeper and your multiplayer mode in the room lobby.
+            </p>
           </div>
 
           {error && (

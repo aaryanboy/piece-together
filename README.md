@@ -34,3 +34,11 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Real-time server availability
+
+Multiplayer uses Socket.IO (not WebRTC). Socket.IO sends its own heartbeat pings, and clients retry connections indefinitely and rejoin their room after a temporary disconnect. These retries can recover when a hosted server wakes up, but they cannot prevent a hosting provider from putting the server to sleep. Use an always-on backend plan if uninterrupted availability is required.
+
+## Multiplayer games
+
+Room hosts can choose jigsaw, Sudoku, or Minesweeper, then start a shared cooperative board or a competitive race with separate boards. Sudoku difficulty and Minesweeper board size are selected in the lobby. The Sudoku and Minesweeper boards are designed for touch screens as well as desktop input. A server restart returns an interrupted mini-game room to its lobby because its in-progress private board data is held in memory.

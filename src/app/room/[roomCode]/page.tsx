@@ -8,7 +8,8 @@ import { usePuzzleState } from "@/hooks/usePuzzleState";
 import { drawPiecePath } from "@/lib/puzzleGenerator";
 import { PRESET_IMAGES, DIFFICULTY_PRESETS } from "@/lib/constants";
 import { PuzzleConfig, PuzzlePieceData } from "@/types/puzzle";
-import { Player } from "@/types/room";
+import { GameDifficulty, Player, RoomGame } from "@/types/room";
+import MiniGameRoom from "@/components/MiniGameRoom";
 
 /* ──────────────────────────────────────────────────────────
  * THEME COLOR PALETTES & TYPE DEFINITION
@@ -793,6 +794,10 @@ export default function RoomPage() {
     );
   }
 
+  if (room.game && room.game !== "jigsaw" && room.status !== "lobby") {
+    return <MiniGameRoom />;
+  }
+
   return (
     <div className="relative flex h-dvh w-full overflow-hidden select-none" style={{ backgroundColor: C.pageBg, color: C.textPrimary }}>
       {/* ──────────────────────────────────────────────────────────
@@ -834,7 +839,36 @@ export default function RoomPage() {
             </div>
 
             {/* Puzzle Details Summary & Host Customization */}
-            {room?.config && (
+            <div className="w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-4 mb-5 text-left">
+              <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF] block mb-2.5">Choose a Game</span>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { id: "jigsaw", icon: "🧩", title: "Jigsaw" },
+                  { id: "sudoku", icon: "🔢", title: "Sudoku" },
+                  { id: "minesweeper", icon: "💣", title: "Minesweeper" },
+                ] as const).map((game) => (
+                  <button
+                    key={game.id}
+                    type="button"
+                    onClick={() => isHost && socket.emit("change_game", { roomCode: room.code, game: game.id as RoomGame })}
+                    disabled={!isHost}
+                    aria-pressed={(room.game ?? "jigsaw") === game.id}
+                    className={`rounded-xl border px-2 py-3 text-center transition-colors disabled:cursor-not-allowed ${
+                      (room.game ?? "jigsaw") === game.id
+                        ? "border-[#FF6B4A] bg-[#FF6B4A]/15 text-white"
+                        : "border-[#26364A] bg-[#0F1720] text-[#9CA3AF] hover:border-[#667085]"
+                    }`}
+                  >
+                    <span className="block text-xl">{game.icon}</span>
+                    <span className="mt-1 block text-[10px] font-bold leading-tight sm:text-xs">{game.title}</span>
+                  </button>
+                ))}
+              </div>
+              {!isHost && <p className="mt-2 text-center text-[10px] text-[#9CA3AF]">Only the host can choose the game.</p>}
+            </div>
+
+            {/* Puzzle Details Summary & Host Customization */}
+            {(room.game ?? "jigsaw") === "jigsaw" && room.config && (
               <div className="w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-3 mb-5">
                 <div className="flex items-center gap-4">
                   <div className="h-16 w-24 rounded-xl overflow-hidden border border-[#26364A] shrink-0">
@@ -898,6 +932,44 @@ export default function RoomPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {(room.game === "sudoku" || room.game === "minesweeper") && (
+              <div className="mb-5 w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-4 text-left">
+                <span className="mb-2.5 block text-xs font-bold uppercase tracking-widest text-[#9CA3AF]">
+                  {room.game === "sudoku" ? "Sudoku difficulty" : "Minefield size"}
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  {(room.game === "sudoku"
+                    ? [
+                        { id: "easy", title: "Easy", detail: "Gentle start" },
+                        { id: "medium", title: "Medium", detail: "Classic" },
+                        { id: "hard", title: "Hard", detail: "Brain burner" },
+                      ]
+                    : [
+                        { id: "beginner", title: "Beginner", detail: "9 × 9 · 10 mines" },
+                        { id: "intermediate", title: "Intermediate", detail: "16 × 16 · 40 mines" },
+                        { id: "expert", title: "Expert", detail: "16 × 30 · 99 mines" },
+                      ]
+                  ).map((difficulty) => (
+                    <button
+                      key={difficulty.id}
+                      type="button"
+                      onClick={() => isHost && socket.emit("change_game_difficulty", { roomCode: room.code, difficulty: difficulty.id as GameDifficulty })}
+                      disabled={!isHost}
+                      aria-pressed={room.gameDifficulty === difficulty.id}
+                      className={`min-h-16 rounded-xl border px-2 py-2 text-center transition-colors disabled:cursor-not-allowed ${
+                        room.gameDifficulty === difficulty.id
+                          ? "border-[#F4B942] bg-[#F4B942]/10 text-white"
+                          : "border-[#26364A] bg-[#0F1720] text-[#9CA3AF] hover:border-[#667085]"
+                      }`}
+                    >
+                      <span className="block text-xs font-bold">{difficulty.title}</span>
+                      <span className="mt-1 block text-[9px] leading-tight">{difficulty.detail}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 

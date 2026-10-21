@@ -1,14 +1,15 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { getSocket, TypedSocket } from '../lib/socket';
-import { RoomState, Player, ChatMessage } from '../types/room';
+import { RoomState, Player, ChatMessage, MiniGameState } from '../types/room';
 import { PuzzleConfig, PuzzlePieceData } from '../types/puzzle';
 
 interface RoomContextType {
   socket: TypedSocket;
   isConnected: boolean;
   room: RoomState | null;
+  miniGameState: MiniGameState | null;
   player: Player | null;
   error: string | null;
   createRoom: (playerName: string, avatar: string, maxPlayers: number) => Promise<string>;
@@ -28,16 +29,43 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [socket] = useState<TypedSocket>(() => getSocket());
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [room, setRoom] = useState<RoomState | null>(null);
+  const [miniGameState, setMiniGameState] = useState<MiniGameState | null>(null);
   const [player, setPlayer] = useState<Player | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const roomRef = useRef(room);
+  const playerRef = useRef(player);
+
+  useEffect(() => {
+    roomRef.current = room;
+    playerRef.current = player;
+  }, [room, player]);
 
   useEffect(() => {
     console.log('[RoomContext] Connecting socket...');
-    socket.connect();
 
     function onConnect() {
       console.log('[RoomContext] ✅ Socket connected, id:', socket.id);
       setIsConnected(true);
+
+      const activeRoom = roomRef.current;
+      const activePlayer = playerRef.current;
+      if (activeRoom && activePlayer) {
+        socket.emit('join_room', {
+          roomCode: activeRoom.code,
+          playerName: activePlayer.name,
+          avatar: activePlayer.avatar,
+          playerId: activePlayer.id,
+        }, (response) => {
+          if (response.success && response.room) {
+            setRoom(response.room);
+            setPlayer(response.room.players[activePlayer.id] ?? activePlayer);
+          } else {
+            const message = response.error || 'Could not rejoin the room after reconnecting.';
+            console.error('[RoomContext] ❌ Automatic room rejoin failed:', message);
+            setError(message);
+          }
+        });
+      }
     }
 
     function onDisconnect(reason: string) {
@@ -52,6 +80,7 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
     function onRoomUpdated(updatedRoom: RoomState) {
       console.log('[RoomContext] 📦 room_updated received:', updatedRoom.code, 'status:', updatedRoom.status, 'players:', Object.keys(updatedRoom.players).length);
       setRoom(updatedRoom);
+      if (updatedRoom.status === 'lobby') setMiniGameState(null);
       const stableId = typeof window !== 'undefined' ? localStorage.getItem('piece-together-player-id') : null;
       if (stableId && updatedRoom.players[stableId]) {
         setPlayer(updatedRoom.players[stableId]);
@@ -82,6 +111,10 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
 
+    function onMiniGameState(state: MiniGameState) {
+      setMiniGameState(state);
+    }
+
     function onErrorMessage({ message }: { message: string }) {
       console.error('[RoomContext] ⚠️ error_message from server:', message);
       setError(message);
@@ -100,8 +133,11 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socket.on('connect_error', onConnectError);
     socket.on('room_updated', onRoomUpdated);
     socket.on('game_started', onGameStarted);
+    socket.on('mini_game_state', onMiniGameState);
     socket.on('error_message', onErrorMessage);
     socket.on('chat_message', onChatMessage);
+
+    socket.connect();
 
     return () => {
       socket.off('connect', onConnect);
@@ -109,6 +145,7 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socket.off('connect_error', onConnectError);
       socket.off('room_updated', onRoomUpdated);
       socket.off('game_started', onGameStarted);
+      socket.off('mini_game_state', onMiniGameState);
       socket.off('error_message', onErrorMessage);
       socket.off('chat_message', onChatMessage);
     };
@@ -252,6 +289,7 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
         socket,
         isConnected,
         room,
+        miniGameState,
         player,
         error,
         createRoom,

@@ -1,5 +1,29 @@
 import { PuzzleConfig, PuzzlePieceData } from './puzzle';
 
+export type RoomGame = 'jigsaw' | 'sudoku' | 'minesweeper';
+export type GameDifficulty = 'easy' | 'medium' | 'hard' | 'beginner' | 'intermediate' | 'expert';
+
+export interface SudokuGameState {
+  game: 'sudoku';
+  difficulty: 'easy' | 'medium' | 'hard';
+  puzzle: number[][];
+  board: number[][];
+  given: boolean[][];
+  status: 'playing' | 'won';
+}
+
+export interface MinesweeperGameState {
+  game: 'minesweeper';
+  difficulty: 'beginner' | 'intermediate' | 'expert';
+  rows: number;
+  cols: number;
+  mineCount: number;
+  cells: Array<{ revealed: boolean; flagged: boolean; adjacent?: number; mine?: boolean }>;
+  status: 'playing' | 'won' | 'lost';
+}
+
+export type MiniGameState = SudokuGameState | MinesweeperGameState;
+
 export interface Player {
   id: string; // Stable session ID (survives reconnects)
   socketId: string; // Current active transient socket connection ID
@@ -26,6 +50,8 @@ export interface RoomState {
   code: string;
   hostId: string;
   status: 'lobby' | 'playing' | 'completed';
+  game?: RoomGame;
+  gameDifficulty?: GameDifficulty;
   maxPlayers: number;
   config: PuzzleConfig | null;
   pieces: PuzzlePieceData[];
@@ -41,4 +67,3 @@ export interface RoomState {
   competitiveResults?: Record<string, { finishedAt: number; durationSeconds: number; place: number }>;
   quitPlayers?: string[];
 }
-

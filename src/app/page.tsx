@@ -63,8 +63,8 @@ export default function LandingPage() {
           </h1>
 
           <p className="max-w-md text-[15px] leading-relaxed text-[#A8ADC4] sm:text-lg">
-            Open a room, drop in an image, and watch it come together as friends
-            drag pieces in real time — cursors, chat, and all.
+            Choose jigsaw, Sudoku, or Minesweeper, then play a shared board together
+            or race your friends on separate boards — with live chat in the room.
           </p>
 
           <div className="mt-1 flex flex-col gap-3 xs:flex-row sm:flex-row">
@@ -82,15 +82,15 @@ export default function LandingPage() {
           <div className="jb-mono mt-1 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10.5px] uppercase tracking-wider text-[#6C7A94]">
             <span className="flex items-center gap-1.5">
               <i className="dot" style={{ background: "#FF6B4A" }} />
-              Pick an image
+              Choose a game
             </span>
             <span className="flex items-center gap-1.5">
               <i className="dot" style={{ background: "#F4B942" }} />
-              Share the code
+              Invite your crew
             </span>
             <span className="flex items-center gap-1.5">
               <i className="dot" style={{ background: "#8FA7C7" }} />
-              Snap pieces in
+              Play your way
             </span>
           </div>
 
