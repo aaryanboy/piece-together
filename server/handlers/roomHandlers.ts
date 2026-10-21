@@ -159,7 +159,7 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
 
       socket.join(code);
       console.log(`[Server] ✅ Room ${code} created by ${playerName} (session: ${playerId})`);
-      callback({ success: true, roomCode: code });
+      callback({ success: true, roomCode: code, room });
     } catch (e) {
       console.error(`[Server] ❌ create_room error:`, e);
       callback({ success: false, error: e instanceof Error ? e.message : 'Failed to create room' });

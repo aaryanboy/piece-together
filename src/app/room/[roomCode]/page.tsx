@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useRoom } from "@/context/RoomContext";
 import { usePuzzleState } from "@/hooks/usePuzzleState";
 import { drawPiecePath } from "@/lib/puzzleGenerator";
@@ -77,9 +77,58 @@ const LIGHT_THEME: ThemeColors = {
 };
 
 export default function RoomPage() {
-  const { room, socket, player, returnToLobby, playAgain, leaveRoom, updateConfig } = useRoom();
+  const { room: currentRoom, socket, player, isConnected, joinRoom, returnToLobby, playAgain, leaveRoom, updateConfig } = useRoom();
   const router = useRouter();
+  const { roomCode: routeRoomCode } = useParams<{ roomCode: string }>();
+  const roomCode = routeRoomCode.toUpperCase();
+  const room = currentRoom?.code === roomCode ? currentRoom : null;
   const [showLobbySettings, setShowLobbySettings] = useState(false);
+  const [entryName, setEntryName] = useState(() =>
+    typeof window === "undefined" ? "" : localStorage.getItem("piece-together-player-name") || ""
+  );
+  const [entryError, setEntryError] = useState("");
+  const [isJoiningFromLink, setIsJoiningFromLink] = useState(false);
+  const [connectionTimedOut, setConnectionTimedOut] = useState(false);
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
+  const restoreAttemptedRoom = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (isConnected) return;
+
+    const timeout = window.setTimeout(() => setConnectionTimedOut(true), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [connectionAttempt, isConnected]);
+
+  useEffect(() => {
+    if (room || !isConnected || !roomCode || restoreAttemptedRoom.current === roomCode) return;
+
+    const playerId = localStorage.getItem("piece-together-player-id");
+    if (!playerId) return;
+
+    restoreAttemptedRoom.current = roomCode;
+    const savedName = localStorage.getItem("piece-together-player-name") || "Returning player";
+    const savedAvatar = localStorage.getItem("piece-together-player-avatar") || savedName.charAt(0).toUpperCase();
+    joinRoom(roomCode, savedName, savedAvatar).catch((error: unknown) => {
+      setEntryError(error instanceof Error ? error.message : "Could not join this room.");
+    });
+  }, [isConnected, joinRoom, room, roomCode]);
+
+  async function joinRoomFromLink() {
+    if (!entryName.trim()) {
+      setEntryError("Enter your name to join the room.");
+      return;
+    }
+
+    setIsJoiningFromLink(true);
+    setEntryError("");
+    try {
+      await joinRoom(roomCode, entryName.trim(), entryName.trim().charAt(0).toUpperCase());
+    } catch (error: unknown) {
+      setEntryError(error instanceof Error ? error.message : "Could not join this room.");
+    } finally {
+      setIsJoiningFromLink(false);
+    }
+  }
 
   const {
     pieces,
@@ -785,13 +834,76 @@ export default function RoomPage() {
   // Loading state — room data hasn't synced from the server yet
   if (!room) {
     return (
-      <div className="flex h-dvh w-full items-center justify-center" style={{ backgroundColor: "#0F1720" }}>
-        <div className="flex flex-col items-center gap-4 text-center">
-          <BrandMark className="h-12 w-12 animate-pulse" />
-          <span className="text-lg font-bold text-[#F3F4F6]">Connecting to room…</span>
-          <span className="text-sm text-[#9CA3AF]">Please wait while we sync with the server.</span>
+      <main className="flex min-h-dvh w-full items-center justify-center bg-[#0F1720] px-5 py-10 text-[#F3F4F6]">
+        <div className="w-full max-w-md rounded-3xl border border-[#26364A] bg-[#192533] p-7 text-center shadow-2xl sm:p-9">
+          <BrandLogo
+            className="mb-8 justify-center"
+            markClassName="h-8 w-8"
+            labelClassName="font-display text-lg font-bold tracking-wide text-[#F3F4F6]"
+          />
+          <BrandMark className={`mx-auto mb-4 h-10 w-10 ${isConnected ? "" : "animate-pulse"}`} />
+          <h1 className="text-xl font-bold">
+            {isConnected ? "Join this room" : connectionTimedOut ? "Can’t reach the game server" : "Connecting to the game server…"}
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-[#9CA3AF]">
+            {isConnected
+              ? `Enter your name to join room ${roomCode}.`
+              : connectionTimedOut
+                ? "The room is not loading because the multiplayer server is unavailable. Check NEXT_PUBLIC_SOCKET_URL in Vercel and make sure your Socket.IO server is running."
+                : "Connecting you to the multiplayer server. This should only take a moment."}
+          </p>
+
+          {entryError && (
+            <p role="alert" className="mt-4 rounded-xl border border-[#FF6B4A]/40 bg-[#FF6B4A]/10 px-4 py-3 text-sm text-[#FFB4A0]">
+              {entryError}
+            </p>
+          )}
+
+          {isConnected ? (
+            <form
+              className="mt-6 flex flex-col gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void joinRoomFromLink();
+              }}
+            >
+              <label htmlFor="direct-room-name" className="sr-only">Your name</label>
+              <input
+                id="direct-room-name"
+                value={entryName}
+                onChange={(event) => setEntryName(event.target.value)}
+                maxLength={20}
+                placeholder="Your display name"
+                className="w-full rounded-xl border border-[#34465D] bg-[#0F1720] px-4 py-3 text-white outline-none transition focus:border-[#FF6B4A]"
+              />
+              <button
+                type="submit"
+                disabled={isJoiningFromLink}
+                className="rounded-xl bg-[#FF6B4A] px-4 py-3 font-bold text-[#0F1720] transition hover:bg-[#ff8065] disabled:opacity-60"
+              >
+                {isJoiningFromLink ? "Joining room…" : "Join Room"}
+              </button>
+            </form>
+          ) : connectionTimedOut ? (
+            <button
+              type="button"
+              onClick={() => {
+                socket.disconnect();
+                socket.connect();
+                setConnectionTimedOut(false);
+                setConnectionAttempt((attempt) => attempt + 1);
+              }}
+              className="mt-6 w-full rounded-xl border border-[#34465D] px-4 py-3 font-semibold transition hover:bg-white/5"
+            >
+              Retry connection
+            </button>
+          ) : null}
+
+          <Link href="/" className="mt-5 inline-block text-sm font-semibold text-[#F4B942] hover:underline">
+            Back to home
+          </Link>
         </div>
-      </div>
+      </main>
     );
   }
 

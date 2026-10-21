@@ -2,7 +2,7 @@ import { RoomState, Player, ChatMessage, MiniGameState, RoomGame, GameDifficulty
 import { PuzzleConfig, PuzzlePieceData } from './puzzle';
 
 export interface ClientToServerEvents {
-  create_room: (data: { playerName: string; avatar: string; maxPlayers: number; playerId: string }, callback: (response: { success: boolean; roomCode?: string; error?: string }) => void) => void;
+  create_room: (data: { playerName: string; avatar: string; maxPlayers: number; playerId: string }, callback: (response: { success: boolean; roomCode?: string; room?: RoomState; error?: string }) => void) => void;
   join_room: (data: { roomCode: string; playerName: string; avatar: string; playerId: string }, callback: (response: { success: boolean; room?: RoomState; error?: string }) => void) => void;
   leave_room: (data: { roomCode: string }) => void;
   update_settings: (data: { roomCode: string; config: PuzzleConfig }) => void;

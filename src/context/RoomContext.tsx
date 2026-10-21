@@ -165,6 +165,8 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
       : `p-${Math.random().toString(36).substring(2, 11)}`;
     if (typeof window !== 'undefined') {
       localStorage.setItem('piece-together-player-id', stableId);
+      localStorage.setItem('piece-together-player-name', playerName);
+      localStorage.setItem('piece-together-player-avatar', avatar);
     }
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -176,8 +178,36 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearTimeout(timeout);
         console.log('[RoomContext] 📨 create_room callback received:', response);
         if (response.success && response.roomCode) {
-          console.log('[RoomContext] ✅ Room created:', response.roomCode);
-          resolve(response.roomCode);
+          const createdCode = response.roomCode;
+          console.log('[RoomContext] ✅ Room created:', createdCode);
+          const acceptRoom = (createdRoom: RoomState) => {
+            setRoom(createdRoom);
+            setPlayer(createdRoom.players[stableId] ?? null);
+            resolve(createdCode);
+          };
+
+          if (response.room) {
+            acceptRoom(response.room);
+          } else {
+            const joinTimeout = setTimeout(() => {
+              reject(new Error('Room was created, but loading it timed out.'));
+            }, 10000);
+            socket.emit('join_room', {
+              roomCode: createdCode,
+              playerName,
+              avatar,
+              playerId: stableId,
+            }, (joinResponse) => {
+              clearTimeout(joinTimeout);
+              if (joinResponse.success && joinResponse.room) {
+                acceptRoom(joinResponse.room);
+              } else {
+                const message = joinResponse.error || 'Room created, but could not load it.';
+                setError(message);
+                reject(new Error(message));
+              }
+            });
+          }
         } else {
           console.error('[RoomContext] ❌ Room creation failed:', response.error);
           setError(response.error || 'Failed to create room');
@@ -201,6 +231,8 @@ export const RoomProvider: React.FC<{ children: React.ReactNode }> = ({ children
       : `p-${Math.random().toString(36).substring(2, 11)}`;
     if (typeof window !== 'undefined') {
       localStorage.setItem('piece-together-player-id', stableId);
+      localStorage.setItem('piece-together-player-name', playerName);
+      localStorage.setItem('piece-together-player-avatar', avatar);
     }
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
