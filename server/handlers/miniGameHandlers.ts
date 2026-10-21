@@ -3,7 +3,7 @@ import { MiniGameState, MinesweeperGameState, RoomState, SudokuGameState } from 
 import { dbStore } from '../utils/dbStore';
 import { roomStore } from '../utils/roomStore';
 
-type SudokuSession = { state: SudokuGameState };
+type SudokuSession = { state: SudokuGameState; solution: number[][] };
 type MinesweeperSession = { state: MinesweeperGameState; mines: boolean[] };
 type PlayerSession = SudokuSession | MinesweeperSession;
 type RoomSession = { shared?: PlayerSession; players: Record<string, PlayerSession> };
@@ -19,6 +19,59 @@ function shuffle<T>(items: T[]): T[] {
   return result;
 }
 
+function countSudokuSolutions(board: number[][], limit = 2): number {
+  let bestRow = -1;
+  let bestCol = -1;
+  let bestCandidates: number[] | null = null;
+
+  for (let row = 0; row < 9; row++) {
+    for (let col = 0; col < 9; col++) {
+      if (board[row][col] !== 0) continue;
+      const candidates: number[] = [];
+      for (let value = 1; value <= 9; value++) {
+        let allowed = true;
+        for (let index = 0; index < 9; index++) {
+          if (board[row][index] === value || board[index][col] === value) {
+            allowed = false;
+            break;
+          }
+        }
+        if (!allowed) continue;
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        for (let r = boxRow; allowed && r < boxRow + 3; r++) {
+          for (let c = boxCol; c < boxCol + 3; c++) {
+            if (board[r][c] === value) {
+              allowed = false;
+              break;
+            }
+          }
+        }
+        if (allowed) candidates.push(value);
+      }
+
+      if (candidates.length === 0) return 0;
+      if (!bestCandidates || candidates.length < bestCandidates.length) {
+        bestRow = row;
+        bestCol = col;
+        bestCandidates = candidates;
+        if (candidates.length === 1) break;
+      }
+    }
+    if (bestCandidates?.length === 1) break;
+  }
+
+  if (!bestCandidates) return 1;
+  let solutions = 0;
+  for (const value of bestCandidates) {
+    board[bestRow][bestCol] = value;
+    solutions += countSudokuSolutions(board, limit - solutions);
+    board[bestRow][bestCol] = 0;
+    if (solutions >= limit) return solutions;
+  }
+  return solutions;
+}
+
 function makeSudoku(difficulty: SudokuGameState['difficulty']): SudokuSession {
   const groups = shuffle([0, 1, 2]);
   const rows = shuffle(groups.flatMap((group) => shuffle([0, 1, 2]).map((row) => group * 3 + row)));
@@ -29,10 +82,21 @@ function makeSudoku(difficulty: SudokuGameState['difficulty']): SudokuSession {
   );
   const puzzle = solution.map((row) => [...row]);
   const blanks = difficulty === 'easy' ? 34 : difficulty === 'medium' ? 44 : 52;
-  for (const index of shuffle(Array.from({ length: 81 }, (_, i) => i)).slice(0, blanks)) {
-    puzzle[Math.floor(index / 9)][index % 9] = 0;
+  let removed = 0;
+  for (const index of shuffle(Array.from({ length: 81 }, (_, i) => i))) {
+    if (removed >= blanks) break;
+    const row = Math.floor(index / 9);
+    const col = index % 9;
+    const previousValue = puzzle[row][col];
+    puzzle[row][col] = 0;
+    if (countSudokuSolutions(puzzle.map((line) => [...line])) === 1) {
+      removed++;
+    } else {
+      puzzle[row][col] = previousValue;
+    }
   }
   return {
+    solution,
     state: {
       game: 'sudoku',
       difficulty,
@@ -72,6 +136,7 @@ function cloneSession(session: PlayerSession): PlayerSession {
     return { mines: [...session.mines], state: { ...session.state, cells: session.state.cells.map((cell) => ({ ...cell })) } };
   }
   return {
+    solution: session.solution.map((row) => [...row]),
     state: {
       ...session.state,
       puzzle: session.state.puzzle.map((row) => [...row]),
@@ -85,9 +150,9 @@ function publicState(session: PlayerSession): MiniGameState {
   return session.state;
 }
 
-function saveAndPublish(io: Server, room: RoomState, playerId?: string) {
+function saveAndPublish(io: Server, room: RoomState, playerId?: string, publishRoom = false) {
   roomStore.setRoom(room.code, room);
-  dbStore.saveRoom(room);
+  if (publishRoom) dbStore.saveRoom(room);
   const session = sessions.get(room.code);
   if (!session) return;
   if (room.mode === 'competitive') {
@@ -102,7 +167,7 @@ function saveAndPublish(io: Server, room: RoomState, playerId?: string) {
   } else if (session.shared) {
     io.to(room.code).emit('mini_game_state', publicState(session.shared));
   }
-  io.to(room.code).emit('room_updated', room);
+  if (publishRoom) io.to(room.code).emit('room_updated', room);
 }
 
 function maybeComplete(io: Server, room: RoomState, session: PlayerSession, playerId?: string) {
@@ -283,7 +348,9 @@ export function registerMiniGameHandlers(io: Server, socket: Socket) {
         }
       }
       sudoku.board[row][col] = value ?? 0;
-      if (sudoku.board.every((line) => line.every((cell) => cell !== 0))) {
+      if ('solution' in playerSession && sudoku.board.every((line, row) =>
+        line.every((cell, col) => cell === playerSession.solution[row][col])
+      )) {
         maybeComplete(io, room, playerSession, room.mode === 'competitive' ? player.id : undefined);
       }
     } else if (action.type.startsWith('minesweeper_') && playerSession.state.game === 'minesweeper') {
@@ -325,6 +392,11 @@ export function registerMiniGameHandlers(io: Server, socket: Socket) {
     } else {
       return;
     }
-    saveAndPublish(io, room, room.mode === 'competitive' ? player.id : undefined);
+    saveAndPublish(
+      io,
+      room,
+      room.mode === 'competitive' ? player.id : undefined,
+      playerSession.state.status !== 'playing'
+    );
   });
 }

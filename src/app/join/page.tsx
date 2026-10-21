@@ -86,8 +86,9 @@ function JoinRoomForm() {
 
           <div className="flex flex-col gap-5">
             <div>
-              <label className="section-label">Your Name</label>
+              <label htmlFor="player-name" className="section-label">Your Name</label>
               <input
+                id="player-name"
                 type="text"
                 placeholder="Enter display name…"
                 value={playerName}
@@ -98,8 +99,9 @@ function JoinRoomForm() {
             </div>
 
             <div>
-              <label className="section-label">4-Digit Room Code</label>
+              <label htmlFor="room-code" className="section-label">4-Digit Room Code</label>
               <input
+                id="room-code"
                 type="text"
                 placeholder="1234"
                 value={roomCode}
@@ -128,15 +130,13 @@ function JoinRoomForm() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
-        .pt-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-        .font-display { font-family: 'Fraunces', serif; font-optical-sizing: auto; }
-        .jb-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+        .pt-app { font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif; }
+        .font-display { font-family: Georgia, 'Times New Roman', serif; font-optical-sizing: auto; }
+        .jb-mono { font-family: var(--font-geist-mono), ui-monospace, monospace; }
 
         .section-label {
           display: block;
-          font-family: 'JetBrains Mono', ui-monospace, monospace;
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
           font-size: 11px;
           text-transform: uppercase;
           letter-spacing: 0.14em;

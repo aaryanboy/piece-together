@@ -95,9 +95,9 @@ export default function MiniGameRoom() {
     return <main className="flex min-h-dvh items-center justify-center bg-[#0F1C2E] text-[#F5EFE0]">Rejoining game…</main>;
   }
 
-  function revealMine(index: number) {
+  function revealMine(index: number, forceFlag = false) {
     if (!canPlay) return;
-    const type = flagMode ? "minesweeper_flag" : "minesweeper_reveal";
+    const type = forceFlag || flagMode ? "minesweeper_flag" : "minesweeper_reveal";
     socket.emit("mini_game_action", { roomCode: room.code, action: { type, index } });
   }
 
@@ -230,7 +230,7 @@ export default function MiniGameRoom() {
                     role="gridcell"
                     aria-label={cell.revealed ? cell.mine ? "Mine" : `Revealed ${cell.adjacent ?? 0}` : cell.mine ? "Mine" : cell.flagged ? "Flagged cell" : "Hidden cell"}
                     disabled={!canPlay}
-                    onContextMenu={(event) => { event.preventDefault(); revealMine(index); }}
+                    onContextMenu={(event) => { event.preventDefault(); revealMine(index, true); }}
                     onClick={() => revealMine(index)}
                     className={`aspect-square rounded-md text-xs font-black transition-colors sm:rounded-lg sm:text-sm ${
                       cell.revealed

@@ -770,15 +770,13 @@ export default function SoloPage() {
         </div>
 
         <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
-          .pt-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-          .font-display { font-family: 'Fraunces', serif; font-optical-sizing: auto; }
-          .jb-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+          .pt-app { font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif; }
+          .font-display { font-family: Georgia, 'Times New Roman', serif; font-optical-sizing: auto; }
+          .jb-mono { font-family: var(--font-geist-mono), ui-monospace, monospace; }
 
           .section-label {
             display: block;
-            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-family: var(--font-geist-mono), ui-monospace, monospace;
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.14em;

@@ -44,12 +44,12 @@ const tiles: Tile[] = [];
 
 export default function LandingPage() {
   return (
-    <main className="pt-app relative flex h-dvh w-full items-center overflow-hidden bg-[#0F1C2E] text-[#F5EFE0]">
+    <main className="pt-app relative flex min-h-dvh w-full flex-col overflow-x-hidden bg-[#0F1C2E] text-[#F5EFE0]">
       {/* ambient glow — one accent, kept quiet */}
       <div className="pointer-events-none absolute -left-24 -top-32 h-105 w-105 rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
       <div className="pointer-events-none absolute -bottom-24 -right-16 h-95 w-95 rounded-full bg-[#F4B942]/10 blur-[100px]" />
 
-      <div className="relative z-10 mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-8 px-6 sm:px-8 md:grid-cols-[1.15fr_0.85fr] md:gap-12 md:px-12">
+      <div className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-8 px-6 py-12 sm:px-8 sm:py-16 md:grid-cols-[1.15fr_0.85fr] md:gap-12 md:px-12">
         {/* Left — content */}
         <div className="flex flex-col gap-4 sm:gap-5">
           <span className="jb-mono text-[10px] uppercase tracking-[0.28em] text-[#F4B942] sm:text-[11px]">
@@ -143,12 +143,63 @@ export default function LandingPage() {
         </div>
       </div>
 
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+      <section aria-labelledby="games-heading" className="relative z-10 mx-auto w-full max-w-6xl px-6 pb-14 sm:px-8 sm:pb-20 md:px-12">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <span className="jb-mono text-[10px] uppercase tracking-[0.22em] text-[#F4B942]">Pick your kind of fun</span>
+            <h2 id="games-heading" className="mt-2 font-display text-2xl font-bold sm:text-3xl">Three games. One shared room.</h2>
+          </div>
+          <p className="max-w-sm text-sm leading-relaxed text-[#A8ADC4]">
+            Team up around one board or race on your own. Choose your game in the room lobby.
+          </p>
+        </div>
 
-        .pt-app { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-        .font-display { font-family: 'Fraunces', serif; font-optical-sizing: auto; font-weight: 650; }
-        .jb-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+        <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+          {[
+            { icon: "🧩", title: "Jigsaw", description: "Trade ideas, find the edges, and watch the picture come together.", accent: "#FF6B4A", tag: "MAKE IT FIT" },
+            { icon: "🔢", title: "Sudoku", description: "Share the logic or race to fill every square without a conflict.", accent: "#73D5C1", tag: "THINK IT THROUGH" },
+            { icon: "💣", title: "Minesweeper", description: "Read the clues, mark the danger, and uncover the safe path.", accent: "#F4B942", tag: "TRUST YOUR GUT" },
+          ].map((game) => (
+            <article
+              key={game.title}
+              className="game-card rounded-2xl border border-white/10 bg-[#17283D]/85 p-5"
+            >
+              <div className="mb-5 flex items-start justify-between">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F1C2E] text-2xl shadow-inner">{game.icon}</span>
+                <span className="jb-mono rounded-full border border-white/10 px-2.5 py-1 text-[9px] tracking-wider" style={{ color: game.accent }}>{game.tag}</span>
+              </div>
+              <h3 className="font-display text-xl font-bold">{game.title}</h3>
+              <p className="mt-2 min-h-12 text-sm leading-relaxed text-[#A8ADC4]">{game.description}</p>
+              <span className="jb-mono mt-4 inline-flex text-[9px] uppercase tracking-[0.16em]" style={{ color: game.accent }}>
+                Co-op or competitive
+              </span>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section aria-label="How it works" className="relative z-10 border-t border-white/[0.07] bg-[#0B1727]/70">
+        <div className="mx-auto grid max-w-6xl gap-5 px-6 py-8 sm:grid-cols-3 sm:px-8 md:px-12">
+          {[
+            { number: "01", title: "Make a room", text: "Create a private room, then pick a game in the lobby." },
+            { number: "02", title: "Bring your people", text: "Share one short code. Friends can join on mobile or desktop." },
+            { number: "03", title: "Play your way", text: "Work on a shared board or turn it into a friendly race." },
+          ].map((step) => (
+            <div key={step.number} className="flex gap-3">
+              <span className="jb-mono pt-0.5 text-xs text-[#FF6B4A]">{step.number}</span>
+              <div>
+                <h3 className="text-sm font-bold">{step.title}</h3>
+                <p className="mt-1 text-xs leading-relaxed text-[#8A96AE]">{step.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <style>{`
+        .pt-app { font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif; }
+        .font-display { font-family: Georgia, 'Times New Roman', serif; font-optical-sizing: auto; font-weight: 650; }
+        .jb-mono { font-family: var(--font-geist-mono), ui-monospace, monospace; }
 
         .headline {
           font-size: clamp(2.35rem, 8.2vw, 4.75rem);

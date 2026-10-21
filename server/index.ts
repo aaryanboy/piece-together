@@ -10,12 +10,14 @@ import { registerMiniGameHandlers } from './handlers/miniGameHandlers';
 import { ClientToServerEvents, ServerToClientEvents } from '../src/types/events';
 
 const app = express();
-app.use(cors());
-app.use(express.json());
-
 const allowedOrigins = process.env.CLIENT_ORIGIN
-  ? process.env.CLIENT_ORIGIN.split(',')
+  ? process.env.CLIENT_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
   : '*';
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST'],
+}));
+app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {

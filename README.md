@@ -1,44 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Piece Together
 
-## Getting Started
+Piece Together is a multiplayer puzzle app for playing with friends in a shared room. Players can cooperate on one board or compete on separate boards.
 
-First, run the development server:
+## Games
+
+- **Jigsaw:** Assemble an image together in real time.
+- **Sudoku:** Solve the same puzzle cooperatively or race on matching boards.
+- **Minesweeper:** Reveal one shared board together or compete on separate boards.
+
+The Sudoku and Minesweeper interfaces support touch screens as well as desktop input. Room links are private and excluded from search indexing.
+
+## Run locally
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the Next.js app and the Socket.IO server in separate terminals:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```bash
+npm run server
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Open [http://localhost:3000](http://localhost:3000). The realtime server defaults to port `4000`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment
 
-## Learn More
+Copy `.env.example` to `.env.local` and configure:
 
-To learn more about Next.js, take a look at the following resources:
+- `NEXT_PUBLIC_SOCKET_URL`: URL of the Socket.IO server used by the browser.
+- `CLIENT_ORIGIN`: comma-separated frontend origins allowed by the server.
+- `NEXT_PUBLIC_SITE_URL`: public canonical frontend URL used for metadata, sitemap, and social previews. Set it before building for production.
+- `PORT`: backend port, if the host does not provide one.
+- `DB_DIR` / `DB_PATH`: optional SQLite storage location; use persistent storage in production.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+If `NEXT_PUBLIC_SITE_URL` is unset, no public URLs are added to the sitemap. Configure it for production so search engines and social platforms receive the correct site URL.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Production
 
-## Deploy on Vercel
+Build and run the frontend with:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run build
+npm run start
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Run `npm run server` as a separate, always-on service and set `NEXT_PUBLIC_SOCKET_URL` to its public URL and `CLIENT_ORIGIN` to the frontend origin. Socket.IO heartbeat and client reconnection help recover transient disconnects, but cannot prevent a hosting provider from sleeping the server.
 
-## Real-time server availability
+The server persists room metadata to SQLite. In-progress Sudoku and Minesweeper board data is held in memory, so a server restart returns those rooms to the lobby.
 
-Multiplayer uses Socket.IO (not WebRTC). Socket.IO sends its own heartbeat pings, and clients retry connections indefinitely and rejoin their room after a temporary disconnect. These retries can recover when a hosted server wakes up, but they cannot prevent a hosting provider from putting the server to sleep. Use an always-on backend plan if uninterrupted availability is required.
+## Validation
 
-## Multiplayer games
-
-Room hosts can choose jigsaw, Sudoku, or Minesweeper, then start a shared cooperative board or a competitive race with separate boards. Sudoku difficulty and Minesweeper board size are selected in the lobby. The Sudoku and Minesweeper boards are designed for touch screens as well as desktop input. A server restart returns an interrupted mini-game room to its lobby because its in-progress private board data is held in memory.
+```bash
+npm run lint
+npx tsc --noEmit
+npm run build
+```
