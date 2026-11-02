@@ -16,19 +16,6 @@ function sendSudokuValue(
   value: number | null,
 ) {
   if (!room || !canPlay || state.given[row][col]) return;
-  if (value !== null) {
-    for (let index = 0; index < 9; index++) {
-      if ((index !== col && state.board[row][index] === value) ||
-        (index !== row && state.board[index][col] === value)) return;
-    }
-    const startRow = Math.floor(row / 3) * 3;
-    const startCol = Math.floor(col / 3) * 3;
-    for (let r = startRow; r < startRow + 3; r++) {
-      for (let c = startCol; c < startCol + 3; c++) {
-        if ((r !== row || c !== col) && state.board[r][c] === value) return;
-      }
-    }
-  }
   socket.emit("mini_game_action", { roomCode: room.code, action: { type: "sudoku_set", row, col, value } });
 }
 
@@ -44,6 +31,12 @@ export default function MiniGameRoom() {
   const hasFinished = room?.mode === "competitive" && !!room.competitiveResults?.[localId];
   const hasQuit = !!room?.quitPlayers?.includes(localId);
   const canPlay = !!room && !!player && !isSpectator && !hasFinished && !hasQuit && room.status === "playing";
+  const firstEmptyCell = useMemo(() => {
+    if (!miniGameState || miniGameState.game !== "sudoku") return null;
+    const index = miniGameState.given.flat().findIndex((isGiven) => !isGiven);
+    return index < 0 ? null : { row: Math.floor(index / 9), col: index % 9 };
+  }, [miniGameState]);
+  const activeSudokuCell = selectedCell ?? firstEmptyCell;
 
   useEffect(() => {
     if (!room?.startedAt || room.status === "completed") return;
@@ -57,39 +50,53 @@ export default function MiniGameRoom() {
     if (!miniGameState || miniGameState.game !== "sudoku") return;
     const sudokuState = miniGameState;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setSelectedCell(null);
-      if (!selectedCell) return;
-      const value = /^[1-9]$/.test(event.key) ? Number(event.key) : event.key === "Backspace" || event.key === "Delete" ? null : undefined;
+      if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (!activeSudokuCell) return;
+      const key = /^[1-9]$/.test(event.key) ? event.key : /^Numpad[1-9]$/.test(event.code) ? event.code.slice(-1) : event.key;
+      const value = /^[1-9]$/.test(key) ? Number(key) : key === "Backspace" || key === "Delete" ? null : undefined;
       if (value === undefined) return;
       event.preventDefault();
-      sendSudokuValue(socket, room, canPlay, sudokuState, selectedCell.row, selectedCell.col, value);
+      sendSudokuValue(socket, room, canPlay, sudokuState, activeSudokuCell.row, activeSudokuCell.col, value);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [miniGameState, selectedCell, socket, room, canPlay]);
+  }, [miniGameState, activeSudokuCell, socket, room, canPlay]);
 
   const title = room?.game === "sudoku" ? "Sudoku" : "Minesweeper";
   const playerCount = room ? Object.values(room.players).filter((entry) => !entry.isOffline).length : 0;
 
   const sudokuConflicts = useMemo(() => {
-    if (!miniGameState || miniGameState.game !== "sudoku" || !selectedCell) return new Set<string>();
+    if (!miniGameState || miniGameState.game !== "sudoku") return new Set<string>();
     const { board } = miniGameState;
-    const selectedValue = board[selectedCell.row][selectedCell.col];
-    if (!selectedValue) return new Set<string>();
     const conflicts = new Set<string>();
-    for (let i = 0; i < 9; i++) {
-      if (i !== selectedCell.col && board[selectedCell.row][i] === selectedValue) conflicts.add(`${selectedCell.row}-${i}`);
-      if (i !== selectedCell.row && board[i][selectedCell.col] === selectedValue) conflicts.add(`${i}-${selectedCell.col}`);
+    const markConflicts = (cells: Array<[number, number]>) => {
+      const positionsByValue = new Map<number, string[]>();
+      for (const [row, col] of cells) {
+        const value = board[row][col];
+        if (!value) continue;
+        const positions = positionsByValue.get(value) ?? [];
+        positions.push(`${row}-${col}`);
+        positionsByValue.set(value, positions);
+      }
+      for (const positions of positionsByValue.values()) {
+        if (positions.length > 1) positions.forEach((position) => conflicts.add(position));
+      }
+    };
+
+    for (let index = 0; index < 9; index++) {
+      markConflicts(Array.from({ length: 9 }, (_, position) => [index, position]));
+      markConflicts(Array.from({ length: 9 }, (_, position) => [position, index]));
     }
-    const boxRow = Math.floor(selectedCell.row / 3) * 3;
-    const boxCol = Math.floor(selectedCell.col / 3) * 3;
-    for (let row = boxRow; row < boxRow + 3; row++) {
-      for (let col = boxCol; col < boxCol + 3; col++) {
-        if ((row !== selectedCell.row || col !== selectedCell.col) && board[row][col] === selectedValue) conflicts.add(`${row}-${col}`);
+    for (let boxRow = 0; boxRow < 9; boxRow += 3) {
+      for (let boxCol = 0; boxCol < 9; boxCol += 3) {
+        markConflicts(Array.from({ length: 9 }, (_, position) => [
+          boxRow + Math.floor(position / 3),
+          boxCol + position % 3,
+        ]));
       }
     }
     return conflicts;
-  }, [miniGameState, selectedCell]);
+  }, [miniGameState]);
 
   if (!room || !player) {
     return <main className="flex min-h-dvh items-center justify-center bg-[#0F1C2E] text-[#F5EFE0]">Rejoining game…</main>;
@@ -167,9 +174,9 @@ export default function MiniGameRoom() {
             <div role="grid" aria-label="Sudoku board" className="mx-auto grid aspect-square w-full max-w-[min(100%,28rem)] grid-cols-9 overflow-hidden rounded-xl border-2 border-[#F4B942]/70 bg-[#0E1A2A]">
               {miniGameState.board.flatMap((row, rowIndex) => row.map((value, colIndex) => {
                 const key = `${rowIndex}-${colIndex}`;
-                const selected = selectedCell?.row === rowIndex && selectedCell?.col === colIndex;
-                const peer = selectedCell && (selectedCell.row === rowIndex || selectedCell.col === colIndex ||
-                  (Math.floor(selectedCell.row / 3) === Math.floor(rowIndex / 3) && Math.floor(selectedCell.col / 3) === Math.floor(colIndex / 3)));
+                const selected = activeSudokuCell?.row === rowIndex && activeSudokuCell?.col === colIndex;
+                const peer = activeSudokuCell && (activeSudokuCell.row === rowIndex || activeSudokuCell.col === colIndex ||
+                  (Math.floor(activeSudokuCell.row / 3) === Math.floor(rowIndex / 3) && Math.floor(activeSudokuCell.col / 3) === Math.floor(colIndex / 3)));
                 return (
                   <button
                     key={key}
@@ -181,9 +188,9 @@ export default function MiniGameRoom() {
                     className={`aspect-square min-w-0 border-r border-b text-base font-bold transition-colors sm:text-xl ${
                       colIndex % 3 === 2 && colIndex < 8 ? "border-r-2 border-r-[#F4B942]/70" : "border-r-[#718096]/25"
                     } ${rowIndex % 3 === 2 && rowIndex < 8 ? "border-b-2 border-b-[#F4B942]/70" : "border-b-[#718096]/25"} ${
-                      selected ? "bg-[#FF6B4A] text-[#0F1C2E]" :
                       sudokuConflicts.has(key) ? "bg-red-500/35 text-red-100" :
-                      value && selectedCell && miniGameState.board[selectedCell.row][selectedCell.col] === value ? "bg-[#F4B942]/25 text-[#F4B942]" :
+                      selected ? "bg-[#FF6B4A] text-[#0F1C2E]" :
+                      value && activeSudokuCell && miniGameState.board[activeSudokuCell.row][activeSudokuCell.col] === value ? "bg-[#F4B942]/25 text-[#F4B942]" :
                       peer ? "bg-white/[0.04]" : "bg-transparent"
                     } ${miniGameState.given[rowIndex][colIndex] ? "text-white" : value ? "text-[#73D5C1]" : "text-transparent"}`}
                   >
@@ -194,16 +201,21 @@ export default function MiniGameRoom() {
             </div>
             <div className="mt-4 grid grid-cols-5 gap-2 sm:grid-cols-10">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((value) => (
-                <button key={value} type="button" disabled={!canPlay || !selectedCell} onClick={() => selectedCell && sendSudokuValue(socket, room, canPlay, miniGameState, selectedCell.row, selectedCell.col, value)}
+                <button key={value} type="button" disabled={!canPlay || !activeSudokuCell || miniGameState.given[activeSudokuCell.row][activeSudokuCell.col]} onClick={() => activeSudokuCell && sendSudokuValue(socket, room, canPlay, miniGameState, activeSudokuCell.row, activeSudokuCell.col, value)}
                   className="min-h-11 rounded-xl border border-white/10 bg-[#0F1C2E] text-lg font-bold text-[#F4B942] transition-colors hover:border-[#F4B942]/70 disabled:opacity-40">
                   {value}
                 </button>
               ))}
-              <button type="button" disabled={!canPlay || !selectedCell} onClick={() => selectedCell && sendSudokuValue(socket, room, canPlay, miniGameState, selectedCell.row, selectedCell.col, null)}
+              <button type="button" disabled={!canPlay || !activeSudokuCell || miniGameState.given[activeSudokuCell.row][activeSudokuCell.col]} onClick={() => activeSudokuCell && sendSudokuValue(socket, room, canPlay, miniGameState, activeSudokuCell.row, activeSudokuCell.col, null)}
                 className="min-h-11 rounded-xl border border-white/10 bg-[#0F1C2E] text-xs font-bold text-[#A8ADC4] transition-colors hover:border-[#FF6B4A]/70 disabled:opacity-40">
                 Erase
               </button>
             </div>
+            <p className="mt-3 text-center text-xs text-[#A8ADC4]">
+              {activeSudokuCell && miniGameState.given[activeSudokuCell.row][activeSudokuCell.col]
+                ? "That is a fixed clue. Select an empty cell to enter a number."
+                : "Tap a number or type 1–9 for the selected cell. Conflicts are highlighted in red."}
+            </p>
           </section>
         )}
 

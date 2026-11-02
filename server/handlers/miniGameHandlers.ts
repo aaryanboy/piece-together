@@ -74,8 +74,8 @@ function countSudokuSolutions(board: number[][], limit = 2): number {
 
 function makeSudoku(difficulty: SudokuGameState['difficulty']): SudokuSession {
   const groups = shuffle([0, 1, 2]);
-  const rows = shuffle(groups.flatMap((group) => shuffle([0, 1, 2]).map((row) => group * 3 + row)));
-  const columns = shuffle(groups.flatMap((group) => shuffle([0, 1, 2]).map((col) => group * 3 + col)));
+  const rows = groups.flatMap((group) => shuffle([0, 1, 2]).map((row) => group * 3 + row));
+  const columns = groups.flatMap((group) => shuffle([0, 1, 2]).map((col) => group * 3 + col));
   const digits = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   const solution = rows.map((row) =>
     columns.map((col) => digits[(row * 3 + Math.floor(row / 3) + col) % 9])
@@ -334,19 +334,6 @@ export function registerMiniGameHandlers(io: Server, socket: Socket) {
       const sudoku = playerSession.state;
       if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row > 8 || col < 0 || col > 8 ||
         (value !== null && (!Number.isInteger(value) || value < 1 || value > 9)) || sudoku.given[row][col]) return;
-      if (value !== null) {
-        for (let i = 0; i < 9; i++) {
-          if ((i !== col && sudoku.board[row][i] === value) ||
-            (i !== row && sudoku.board[i][col] === value)) return;
-        }
-        const boxRow = Math.floor(row / 3) * 3;
-        const boxCol = Math.floor(col / 3) * 3;
-        for (let r = boxRow; r < boxRow + 3; r++) {
-          for (let c = boxCol; c < boxCol + 3; c++) {
-            if ((r !== row || c !== col) && sudoku.board[r][c] === value) return;
-          }
-        }
-      }
       sudoku.board[row][col] = value ?? 0;
       if ('solution' in playerSession && sudoku.board.every((line, row) =>
         line.every((cell, col) => cell === playerSession.solution[row][col])
