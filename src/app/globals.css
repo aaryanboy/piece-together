@@ -224,6 +224,76 @@
   .paper-content, .paper-content-wide { width: calc(100% - 32px); padding-top: 40px; }
 }
 
+.mini-game-page {
+  --paper-ink: #17283a;
+  --paper-muted: #65717a;
+  --paper: #f3eddf;
+  --paper-raised: #fbf7ed;
+  --paper-line: #d6cdbd;
+  --paper-coral: #e86d4d;
+  --paper-gold: #916c32;
+  background: var(--paper);
+  color: var(--paper-ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.mini-game-header, .mini-game-card {
+  border-color: var(--paper-line);
+  background: var(--paper-raised);
+}
+
+.mini-game-header { border-radius: 2px; }
+.mini-game-card { border-radius: 2px; box-shadow: 7px 8px 0 #d9cdb6; }
+.mini-game-title { color: var(--paper-ink); font-family: Georgia, 'Times New Roman', serif; letter-spacing: -0.035em; }
+.mini-game-muted { color: var(--paper-muted); }
+.mini-game-accent { color: var(--paper-gold); }
+.mini-game-timer { background: #e8dfce; color: var(--paper-gold); }
+.mini-game-quiet-button { border-color: var(--paper-line); color: var(--paper-ink); }
+.mini-game-quiet-button:hover { border-color: var(--paper-coral); color: var(--paper-coral); }
+.mini-game-player { border: 1px solid color-mix(in srgb, var(--player-color), transparent 55%); border-radius: 999px; background: color-mix(in srgb, var(--player-color), transparent 90%); color: var(--player-color); }
+
+.sudoku-board { border-color: var(--paper-gold); border-radius: 2px; background: #fffdf7; }
+.sudoku-cell { border-right: 1px solid #d6cdbd; border-bottom: 1px solid #d6cdbd; background: transparent; color: transparent; }
+.sudoku-box-right { border-right: 2px solid #b78a40; }
+.sudoku-box-bottom { border-bottom: 2px solid #b78a40; }
+.sudoku-cell.is-given { color: var(--paper-ink); }
+.sudoku-cell.is-entered { color: #426d77; }
+.sudoku-cell.is-peer { background: #f1ebdc; }
+.sudoku-cell.is-match { background: #ead9aa; color: var(--paper-ink); }
+.sudoku-cell.is-selected { background: var(--paper-coral); color: #fffaf0; }
+.sudoku-cell.is-conflict { background: #f0c1ae; color: #8b3d2c; }
+
+.mini-game-control {
+  border-color: var(--paper-line);
+  border-radius: 2px;
+  background: #fffdf7;
+  color: var(--paper-ink);
+}
+.mini-game-control:hover:not(:disabled) { border-color: var(--paper-coral); background: #f8e5d9; }
+.mini-game-control.is-active { border-color: var(--paper-coral); background: var(--paper-coral); color: #fffaf0; }
+
+.mine-board { border-color: var(--paper-line); border-radius: 2px; background: #e8dfce; }
+.mine-cell { border-radius: 2px; }
+.mine-cell.is-hidden { border: 1px solid #c5b99f; background: #d9cdb6; color: var(--paper-gold); }
+.mine-cell.is-hidden:hover { background: #cbbd9f; }
+.mine-cell.is-revealed { background: #fffdf7; color: #426d77; }
+.mine-cell.is-mine { background: #e47757; color: #fffaf0; }
+
+.mini-game-result { border: 1px solid #d7bc81; border-radius: 2px; background: #f4e8c9; }
+.mini-game-primary { border-radius: 2px; background: var(--paper-ink); color: #fffaf0; }
+.mini-game-primary:hover:not(:disabled) { background: #294559; }
+.mini-game-chat-message { color: var(--paper-ink); }
+.mini-game-chat-message.is-system { color: var(--paper-muted); }
+.mini-game-chat-input { border-color: var(--paper-line); border-radius: 2px; background: #fffdf7; color: var(--paper-ink); }
+.mini-game-chat-input:focus { border-color: var(--paper-coral); box-shadow: 0 0 0 3px rgba(232, 109, 77, 0.12); }
+.mini-game-page ::-webkit-scrollbar-track { background: #e8dfce; }
+.mini-game-page ::-webkit-scrollbar-thumb { background: rgba(23, 40, 58, 0.28); }
+
+@media (max-width: 640px) {
+  .mini-game-card { box-shadow: 4px 5px 0 #d9cdb6; }
+  .mini-game-page .max-w-5xl > section:first-of-type > div:last-child { line-height: 1.5; }
+}
+
 /* Glassmorphism Utilities */
 .glass-panel {
   background: rgba(15, 23, 42, 0.7);
