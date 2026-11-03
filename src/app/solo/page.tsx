@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import BrandLogo, { BrandMark } from "@/components/BrandLogo";
+import PageHeader from "@/components/PageHeader";
 import { drawPiecePath, generatePuzzlePieces } from "@/lib/puzzleGenerator";
 import { PRESET_IMAGES, DIFFICULTY_PRESETS, SNAP_DISTANCE_THRESHOLD } from "@/lib/constants";
 import { PuzzleConfig, PuzzlePieceData } from "@/types/puzzle";
@@ -690,26 +691,19 @@ export default function SoloPage() {
   // Setup screen
   if (!gameStarted) {
     return (
-      <main className="pt-app relative flex min-h-dvh h-auto w-full flex-col overflow-y-auto bg-[#0F1C2E] text-[#F5EFE0] pb-32">
-        <div className="pointer-events-none fixed -left-24 -top-32 h-105 w-105 rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
-        <div className="pointer-events-none fixed -bottom-24 -right-16 h-95 w-95 rounded-full bg-[#F4B942]/8 blur-[100px]" />
-
-        <BrandLogo
-          className="group absolute left-5 top-5 z-20"
-          markClassName="h-7 w-7 transition-transform group-hover:scale-110"
-        />
-
-        <div className="relative z-10 flex flex-1 items-center justify-center px-4 pt-24 sm:px-10 md:pt-16">
-          <div className="w-full max-w-4xl">
-            <div className="mb-6 text-center md:mb-8">
-              <span className="jb-mono text-xs uppercase tracking-[0.28em] text-[#F4B942]">Solo Mode</span>
-              <h1 className="font-display mt-1.5 text-3xl font-bold leading-tight sm:text-4xl">
-                Play <span className="italic text-[#FF6B4A]">solo</span>
+      <main className="paper-page flex w-full flex-col">
+        <PageHeader actionHref="/create" actionLabel="Create a room" />
+        <div className="paper-content paper-content-wide">
+          <div className="w-full">
+            <div className="setup-heading">
+              <span className="setup-kicker">A little time to yourself</span>
+              <h1 className="setup-title">
+                Pick a puzzle. <em>Settle in.</em>
               </h1>
-              <p className="mt-2 text-sm text-[#A8ADC4]">No room needed — just pick a puzzle and start piecing!</p>
+              <p className="setup-description">Choose a picture and a difficulty. You can take it at your own pace.</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-[1.15fr_0.85fr] md:gap-10">
+            <div className="paper-form-card grid grid-cols-1 gap-8 md:grid-cols-[1.15fr_0.85fr] md:gap-10">
               <div className="flex flex-col gap-6">
                 <div>
                   <label className="section-label">Choose Puzzle Image</label>
@@ -761,9 +755,9 @@ export default function SoloPage() {
 
                 <button
                   onClick={handleStartGame}
-                  className="btn-piece btn-piece-primary w-full justify-center py-4 text-base font-bold shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  className="btn-piece btn-piece-primary w-full justify-center py-4 text-base font-bold transition-all"
                 >
-                  🎮 Start Solo Puzzle
+                  Start this puzzle <span aria-hidden="true">↗</span>
                 </button>
               </div>
             </div>

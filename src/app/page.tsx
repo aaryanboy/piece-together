@@ -1,318 +1,424 @@
 import Link from "next/link";
 import { BrandMark } from "@/components/BrandLogo";
 
-/**
- * Deterministic mosaic layout (no Math.random — keeps SSR/CSR markup identical).
- * 4x3 grid, one slot left empty for the "hero" piece that drops in last.
- */
-const GRID_COLS = 4;
-const GRID_ROWS = 3;
-const HERO_SLOT = { row: 1, col: 2 };
+const games = [
+  {
+    name: "Jigsaw",
+    number: "01",
+    description: "Pass pieces around, spot the edges, and see the picture take shape.",
+    kind: "jigsaw",
+    note: "A little teamwork",
+  },
+  {
+    name: "Sudoku",
+    number: "02",
+    description: "Trade deductions—or see who can fill the grid first.",
+    kind: "sudoku",
+    note: "A little brainpower",
+  },
+  {
+    name: "Minesweeper",
+    number: "03",
+    description: "Compare clues, call your shots, and hope your hunch is right.",
+    kind: "mines",
+    note: "A little nerve",
+  },
+];
 
-const NAVY = ["#182B45", "#1E3654", "#14233A", "#213F60", "#233C5E"];
-const CORAL = "#FF6B4A";
-
-type Tile = {
-  row: number;
-  col: number;
-  color: string;
-  delay: number;
-  fx: number;
-  fy: number;
-  fr: number;
-};
-
-const tiles: Tile[] = [];
-{
-  let i = 0;
-  for (let row = 0; row < GRID_ROWS; row++) {
-    for (let col = 0; col < GRID_COLS; col++) {
-      if (row === HERO_SLOT.row && col === HERO_SLOT.col) continue;
-      const isCoral = (row === 0 && col === 3) || (row === 2 && col === 0);
-      tiles.push({
-        row,
-        col,
-        color: isCoral ? CORAL : NAVY[i % NAVY.length],
-        delay: i * 65,
-        fx: (col % 2 === 0 ? -1 : 1) * (36 + i * 5),
-        fy: (row % 2 === 0 ? -1 : 1) * (26 + i * 4),
-        fr: (i % 2 === 0 ? -1 : 1) * (16 + i * 3),
-      });
-      i++;
-    }
+function GamePreview({ kind }: { kind: string }) {
+  if (kind === "sudoku") {
+    return (
+      <div aria-hidden="true" className="game-art sudoku-art">
+        {["4", "", "2", "", "1", "3", "", "4", "2", "", "3", "1", "1", "2", "", "3"].map(
+          (digit, index) => (
+            <span key={index}>{digit}</span>
+          )
+        )}
+      </div>
+    );
   }
+
+  if (kind === "mines") {
+    return (
+      <div aria-hidden="true" className="game-art mines-art">
+        {["1", "1", "", "1", "💣", "1", "", "1", "1"].map((cell, index) => (
+          <span className={cell === "💣" ? "mine-cell" : ""} key={index}>
+            {cell}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div aria-hidden="true" className="game-art jigsaw-art">
+      <span className="jigsaw-sky" />
+      <span className="jigsaw-sun" />
+      <span className="jigsaw-hill" />
+      <span className="jigsaw-piece" />
+      <span className="jigsaw-seam jigsaw-seam-vertical" />
+      <span className="jigsaw-seam jigsaw-seam-horizontal" />
+    </div>
+  );
 }
 
 export default function LandingPage() {
   return (
-    <main className="pt-app relative flex min-h-dvh w-full flex-col overflow-x-hidden bg-[#0F1C2E] text-[#F5EFE0]">
-      {/* ambient glow — one accent, kept quiet */}
-      <div className="pointer-events-none absolute -left-24 -top-32 h-105 w-105 rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
-      <div className="pointer-events-none absolute -bottom-24 -right-16 h-95 w-95 rounded-full bg-[#F4B942]/10 blur-[100px]" />
+    <main className="landing-page">
+      <header className="landing-header">
+        <Link aria-label="Piece Together home" className="landing-brand" href="/">
+          <BrandMark className="h-9 w-9" />
+          <span>Piece Together</span>
+        </Link>
+        <nav aria-label="Main navigation" className="landing-nav">
+          <a href="#games">The games</a>
+          <Link className="nav-join" href="/join">
+            Join a room <span aria-hidden="true">↗</span>
+          </Link>
+        </nav>
+      </header>
 
-      <div className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 items-center gap-8 px-6 py-12 sm:px-8 sm:py-16 md:grid-cols-[1.15fr_0.85fr] md:gap-12 md:px-12">
-        {/* Left — content */}
-        <div className="flex flex-col gap-4 sm:gap-5">
-          <span className="jb-mono text-[10px] uppercase tracking-[0.28em] text-[#F4B942] sm:text-[11px]">
-            Real-time · Multiplayer · Puzzles
-          </span>
-
-          <h1 className="headline font-display">
-            Piece it
+      <section aria-labelledby="hero-title" className="landing-hero">
+        <div className="hero-copy">
+          <p className="eyebrow"><span className="eyebrow-mark" />A place for puzzle people</p>
+          <h1 id="hero-title">
+            Good puzzles
             <br />
-            <span className="italic text-[#FF6B4A]">together.</span>
+            are better <em>together.</em>
           </h1>
-
-          <p className="max-w-md text-[15px] leading-relaxed text-[#A8ADC4] sm:text-lg">
-            Choose jigsaw, Sudoku, or Minesweeper, then play a shared board together
-            or race your friends on separate boards — with live chat in the room.
+          <p className="hero-description">
+            Pick a game, send your friends a room code, and figure it out as you go.
+            No big plan required.
           </p>
-
-          <div className="mt-1 flex flex-col gap-3 xs:flex-row sm:flex-row">
-            <Link href="/create" className="btn-piece btn-piece-primary">
-              Create a room
+          <div className="hero-actions">
+            <Link className="action-primary" href="/create">
+              Start a room <span aria-hidden="true">↗</span>
             </Link>
-            <Link href="/join" className="btn-piece btn-piece-ghost">
-              Join a room
-            </Link>
-            <Link href="/solo" className="btn-piece btn-piece-solo">
-              🎮 Play Solo
+            <Link className="action-secondary" href="/solo">
+              Or play on your own
             </Link>
           </div>
-
-          <div className="jb-mono mt-1 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10.5px] uppercase tracking-wider text-[#6C7A94]">
-            <span className="flex items-center gap-1.5">
-              <i className="dot" style={{ background: "#FF6B4A" }} />
-              Choose a game
-            </span>
-            <span className="flex items-center gap-1.5">
-              <i className="dot" style={{ background: "#F4B942" }} />
-              Invite your crew
-            </span>
-            <span className="flex items-center gap-1.5">
-              <i className="dot" style={{ background: "#8FA7C7" }} />
-              Play your way
-            </span>
-          </div>
-
-          {/* compact mobile stand-in for the mosaic */}
-          <div className="mt-1 flex gap-1.5 md:hidden">
-            {["#FF6B4A", "#F4B942", "#213A5C", "#1B2E4A", "#182B45", "#233C5E"].map(
-              (c, idx) => (
-                <span
-                  key={idx}
-                  className="h-2 w-7 rounded-full opacity-70"
-                  style={{ backgroundColor: c }}
-                />
-              )
-            )}
-          </div>
+          <p className="hero-footnote">
+            <span aria-hidden="true">01</span> Jigsaw, Sudoku &amp; Minesweeper
+            <i aria-hidden="true">·</i> One room, your rules
+          </p>
         </div>
 
-        {/* Right — signature puzzle mosaic (desktop/tablet only) */}
-        <div className="relative hidden aspect-4/3 w-full md:block">
-          <div className="hero-mosaic">
-            {tiles.map((t) => (
-              <div
-                key={`${t.row}-${t.col}`}
-                className="mosaic-tile"
-                style={
-                  {
-                    gridRow: t.row + 1,
-                    gridColumn: t.col + 1,
-                    backgroundColor: t.color,
-                    animationDelay: `${t.delay}ms`,
-                    "--fx": `${t.fx}px`,
-                    "--fy": `${t.fy}px`,
-                    "--fr": `${t.fr}deg`,
-                  } as React.CSSProperties
-                }
-              >
-                {t.col < GRID_COLS - 1 && (
-                  <span className="knob knob-right" style={{ background: t.color }} />
-                )}
-                {t.row < GRID_ROWS - 1 && (
-                  <span className="knob knob-bottom" style={{ background: t.color }} />
-                )}
+        <div className="room-scene">
+          <div className="room-card">
+            <div className="room-card-top">
+              <div>
+                <span className="room-kicker">ROOM PREVIEW</span>
+                <h2>Sunday puzzle club</h2>
               </div>
-            ))}
-            <div
-              className="mosaic-tile mosaic-hero"
-              style={{ gridRow: HERO_SLOT.row + 1, gridColumn: HERO_SLOT.col + 1 }}
-            />
+              <span className="room-code">4K7P</span>
+            </div>
+            <div className="puzzle-board" aria-label="Illustration of friends working on a jigsaw puzzle">
+              <svg aria-hidden="true" viewBox="0 0 480 290" fill="none">
+                <defs>
+                  <clipPath id="board-shape">
+                    <rect x="14" y="12" width="452" height="266" rx="14" />
+                  </clipPath>
+                </defs>
+                <g clipPath="url(#board-shape)">
+                  <rect x="14" y="12" width="452" height="266" fill="#E8B85A" />
+                  <path d="M14 165L93 115L148 149L222 83L294 153L368 98L466 165V278H14V165Z" fill="#6F9B8B" />
+                  <path d="M14 203L91 158L152 196L235 137L300 190L373 148L466 203V278H14V203Z" fill="#315B5A" />
+                  <circle cx="358" cy="72" r="29" fill="#F5E9CE" />
+                  <path d="M163 12H266V79C249 79 249 105 266 105V175H205C205 158 179 158 179 175H115V105C132 105 132 79 115 79V12H163Z" fill="#E86D4D" />
+                  <path d="M14 108H80C80 91 106 91 106 108H163V173C146 173 146 199 163 199V278H14V108Z" fill="#F1D9A5" />
+                  <path d="M266 105H332C332 122 358 122 358 105H466V278H266V199C283 199 283 173 266 173V105Z" fill="#D78359" />
+                  <path d="M163 175H179C179 158 205 158 205 175H266V199C283 199 283 225 266 225V278H163V199C146 199 146 173 163 173V175Z" fill="#E2AC4C" />
+                  <path d="M14 108H80C80 91 106 91 106 108H163M163 12V79C146 79 146 105 163 105H179M266 12V79C249 79 249 105 266 105H332C332 122 358 122 358 105H466M14 199H80C80 182 106 182 106 199H163M266 199C283 199 283 225 266 225V278M163 175H179C179 158 205 158 205 175H266M358 199H466" stroke="#F6E8C9" strokeWidth="4" />
+                  <path d="M14 108V278M163 105V173M266 105V173M466 105V278" stroke="#F6E8C9" strokeWidth="4" />
+                </g>
+              </svg>
+              <span className="cursor-tag cursor-maya"><i />Maya</span>
+              <span className="cursor-tag cursor-you"><i />you</span>
+            </div>
+            <div className="room-card-bottom">
+              <div className="player-stack" aria-hidden="true">
+                <span>M</span><span>J</span><span>+</span>
+              </div>
+              <p><strong>Maya found an edge piece.</strong><br />Your turn to make it fit.</p>
+              <span className="room-live"><i /> 3 here</span>
+            </div>
           </div>
+          <span aria-hidden="true" className="scene-doodle">↘</span>
+          <p className="scene-caption">A shared board, wherever you are.</p>
         </div>
-      </div>
+      </section>
 
-      <section aria-labelledby="games-heading" className="relative z-10 mx-auto w-full max-w-6xl px-6 pb-14 sm:px-8 sm:pb-20 md:px-12">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <section aria-labelledby="games-title" className="games-section" id="games">
+        <div className="games-heading">
           <div>
-            <span className="jb-mono text-[10px] uppercase tracking-[0.22em] text-[#F4B942]">Pick your kind of fun</span>
-            <h2 id="games-heading" className="mt-2 font-display text-2xl font-bold sm:text-3xl">Three games. One shared room.</h2>
+            <p className="eyebrow"><span className="eyebrow-mark" />Choose your kind of fun</p>
+            <h2 id="games-title">Three ways to spend an evening.</h2>
           </div>
-          <p className="max-w-sm text-sm leading-relaxed text-[#A8ADC4]">
-            Team up around one board or race on your own. Choose your game in the room lobby.
-          </p>
+          <p>Play together on one board, or turn it into a friendly race.</p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
-          {[
-            { icon: "jigsaw", title: "Jigsaw", description: "Trade ideas, find the edges, and watch the picture come together.", accent: "#FF6B4A", tag: "MAKE IT FIT" },
-            { icon: "🔢", title: "Sudoku", description: "Share the logic or race to fill every square without a conflict.", accent: "#73D5C1", tag: "THINK IT THROUGH" },
-            { icon: "💣", title: "Minesweeper", description: "Read the clues, mark the danger, and uncover the safe path.", accent: "#F4B942", tag: "TRUST YOUR GUT" },
-          ].map((game) => (
-            <article
-              key={game.title}
-              className="game-card rounded-2xl border border-white/10 bg-[#17283D]/85 p-5"
-            >
-              <div className="mb-5 flex items-start justify-between">
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0F1C2E] text-2xl shadow-inner">
-                  {game.icon === "jigsaw" ? <BrandMark className="h-7 w-7" /> : game.icon}
-                </span>
-                <span className="jb-mono rounded-full border border-white/10 px-2.5 py-1 text-[9px] tracking-wider" style={{ color: game.accent }}>{game.tag}</span>
+        <div className="game-list">
+          {games.map((game) => (
+            <article className={`game-row ${game.kind}-row`} key={game.name}>
+              <span className="game-number">{game.number}</span>
+              <GamePreview kind={game.kind} />
+              <div className="game-copy">
+                <h3>{game.name}</h3>
+                <p>{game.description}</p>
               </div>
-              <h3 className="font-display text-xl font-bold">{game.title}</h3>
-              <p className="mt-2 min-h-12 text-sm leading-relaxed text-[#A8ADC4]">{game.description}</p>
-              <span className="jb-mono mt-4 inline-flex text-[9px] uppercase tracking-[0.16em]" style={{ color: game.accent }}>
-                Co-op or competitive
-              </span>
+              <span className="game-note">{game.note}</span>
             </article>
           ))}
         </div>
       </section>
 
-      <section aria-label="How it works" className="relative z-10 border-t border-white/[0.07] bg-[#0B1727]/70">
-        <div className="mx-auto grid max-w-6xl gap-5 px-6 py-8 sm:grid-cols-3 sm:px-8 md:px-12">
-          {[
-            { number: "01", title: "Make a room", text: "Create a private room, then pick a game in the lobby." },
-            { number: "02", title: "Bring your people", text: "Share one short code. Friends can join on mobile or desktop." },
-            { number: "03", title: "Play your way", text: "Work on a shared board or turn it into a friendly race." },
-          ].map((step) => (
-            <div key={step.number} className="flex gap-3">
-              <span className="jb-mono pt-0.5 text-xs text-[#FF6B4A]">{step.number}</span>
-              <div>
-                <h3 className="text-sm font-bold">{step.title}</h3>
-                <p className="mt-1 text-xs leading-relaxed text-[#8A96AE]">{step.text}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      <footer className="landing-footer">
+        <p>Make a room. Send the code. See what happens.</p>
+        <Link href="/create">Let&apos;s play <span aria-hidden="true">↗</span></Link>
+      </footer>
 
       <style>{`
-        .pt-app { font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif; }
-        .font-display { font-family: Georgia, 'Times New Roman', serif; font-optical-sizing: auto; font-weight: 650; }
-        .jb-mono { font-family: var(--font-geist-mono), ui-monospace, monospace; }
-
-        .headline {
-          font-size: clamp(2.35rem, 8.2vw, 4.75rem);
-          line-height: 0.96;
-          letter-spacing: -0.01em;
+        .landing-page {
+          --ink: #17283a;
+          --muted: #65717a;
+          --paper: #f3eddf;
+          --paper-dark: #e8dfce;
+          --coral: #e86d4d;
+          --gold: #d7a840;
+          min-height: 100dvh;
+          overflow: hidden;
+          background: var(--paper);
+          color: var(--ink);
+          font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
         }
 
-        .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+        .landing-header, .landing-hero, .games-section, .landing-footer {
+          width: min(1120px, calc(100% - 64px));
+          margin-inline: auto;
+        }
 
-        .btn-piece {
-          position: relative;
+        .landing-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          min-height: 82px;
+          border-bottom: 1px solid rgba(23, 40, 58, 0.16);
+        }
+        .landing-brand {
           display: inline-flex;
           align-items: center;
-          justify-content: center;
-          padding: 0.85rem 1.6rem 0.85rem 2rem;
-          border-radius: 14px;
-          font-weight: 600;
-          font-size: 0.95rem;
-          transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-          white-space: nowrap;
+          gap: 10px;
+          color: var(--ink);
+          font-family: Georgia, 'Times New Roman', serif;
+          font-size: 19px;
+          font-weight: 700;
+          letter-spacing: -0.035em;
+          text-decoration: none;
         }
-        .btn-piece::before {
-          content: "";
-          position: absolute;
-          left: -7px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 15px;
-          height: 15px;
-          border-radius: 50%;
-        }
-        .btn-piece-primary { background: #FF6B4A; color: #0F1C2E; }
-        .btn-piece-primary::before { background: #FF6B4A; }
-        .btn-piece-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -10px rgba(255,107,74,0.65); }
+        .landing-nav { display: flex; align-items: center; gap: 30px; font-size: 13px; }
+        .landing-nav a { color: var(--ink); text-decoration: none; }
+        .landing-nav a:first-child { color: var(--muted); }
+        .landing-nav a:hover, .action-secondary:hover { color: var(--coral); }
+        .landing-nav .nav-join { font-weight: 650; }
+        .nav-join span { margin-left: 4px; color: var(--coral); }
 
-        .btn-piece-ghost {
-          background: transparent;
-          color: #F5EFE0;
-          border: 1.5px solid rgba(245,239,224,0.22);
-        }
-        .btn-piece-ghost::before {
-          background: #0F1C2E;
-          border: 1.5px solid rgba(245,239,224,0.22);
-        }
-        .btn-piece-ghost:hover { border-color: rgba(245,239,224,0.45); transform: translateY(-2px); }
-
-        .btn-piece-solo {
-          background: #F4B942;
-          color: #0F1C2E;
-        }
-        .btn-piece-solo::before { background: #F4B942; }
-        .btn-piece-solo:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -10px rgba(244,185,66,0.65); }
-
-        .hero-mosaic {
+        .landing-hero {
           display: grid;
-          grid-template-columns: repeat(${GRID_COLS}, 1fr);
-          grid-template-rows: repeat(${GRID_ROWS}, 1fr);
+          grid-template-columns: 0.95fr 1.05fr;
+          align-items: center;
+          gap: clamp(42px, 8vw, 100px);
+          padding-block: 82px 92px;
+        }
+        .hero-copy { max-width: 490px; }
+        .eyebrow {
+          display: flex;
+          align-items: center;
           gap: 9px;
-          width: 100%;
-          height: 100%;
+          margin: 0;
+          color: #825d26;
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.11em;
+          text-transform: uppercase;
         }
+        .eyebrow-mark { width: 7px; height: 7px; background: var(--coral); transform: rotate(45deg); }
+        .hero-copy h1, .games-heading h2 {
+          font-family: Georgia, 'Times New Roman', serif;
+          font-weight: 600;
+          letter-spacing: -0.065em;
+        }
+        .hero-copy h1 {
+          margin: 23px 0 19px;
+          font-size: clamp(48px, 6vw, 75px);
+          line-height: 0.99;
+        }
+        .hero-copy h1 em { color: var(--coral); font-weight: 500; }
+        .hero-description {
+          max-width: 400px;
+          margin: 0;
+          color: #56636d;
+          font-size: 16px;
+          line-height: 1.75;
+        }
+        .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 21px; margin-top: 29px; }
+        .action-primary {
+          display: inline-flex;
+          align-items: center;
+          gap: 22px;
+          padding: 14px 17px 14px 20px;
+          background: var(--ink);
+          color: #fffaf0;
+          font-size: 13px;
+          font-weight: 650;
+          text-decoration: none;
+          transition: background 160ms ease, transform 160ms ease;
+        }
+        .action-primary:hover { background: #294559; transform: translateY(-2px); }
+        .action-primary span { color: #f0bf5b; font-size: 16px; }
+        .action-secondary { color: var(--ink); font-size: 13px; font-weight: 600; text-decoration: underline; text-decoration-color: #b7ad9a; text-underline-offset: 4px; }
+        .hero-footnote {
+          margin: 38px 0 0;
+          color: #7b817e;
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 9px;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+        .hero-footnote span { margin-right: 8px; color: var(--coral); }
+        .hero-footnote i { padding-inline: 8px; color: var(--gold); font-style: normal; }
 
-        .mosaic-tile {
+        .room-scene { position: relative; padding: 14px 10px 24px; }
+        .room-card {
           position: relative;
-          border-radius: 16px;
-          animation: settle 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+          z-index: 1;
+          padding: 21px 22px 15px;
+          background: #172b3b;
+          box-shadow: 12px 14px 0 #d9cdb6;
+          transform: rotate(1deg);
         }
-
-        .knob {
+        .room-card-top, .room-card-bottom { display: flex; align-items: center; justify-content: space-between; }
+        .room-card-top { padding-bottom: 16px; }
+        .room-kicker {
+          color: #e4b85c;
+          font-family: var(--font-geist-mono), ui-monospace, monospace;
+          font-size: 9px;
+          letter-spacing: 0.14em;
+        }
+        .room-card-top h2 { margin: 5px 0 0; color: #f4eddf; font-family: Georgia, 'Times New Roman', serif; font-size: 20px; font-weight: 500; letter-spacing: -0.02em; }
+        .room-code { padding: 7px 9px; border: 1px solid #51616a; color: #f4eddf; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 10px; letter-spacing: 0.12em; }
+        .puzzle-board { position: relative; overflow: hidden; background: #e8b85a; }
+        .puzzle-board svg { display: block; width: 100%; }
+        .cursor-tag {
           position: absolute;
-          width: 16px;
-          height: 16px;
-          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          padding: 5px 8px;
+          color: white;
+          font-size: 9px;
+          font-weight: 650;
+          box-shadow: 2px 3px 0 rgba(23, 40, 58, 0.2);
         }
-        .knob-right { right: -8px; top: 50%; transform: translateY(-50%); }
-        .knob-bottom { bottom: -8px; left: 50%; transform: translateX(-50%); }
+        .cursor-tag i { width: 6px; height: 6px; border: 1px solid white; border-radius: 50%; }
+        .cursor-maya { top: 45%; left: 18%; background: #315b5a; transform: rotate(-4deg); }
+        .cursor-you { right: 12%; bottom: 17%; background: var(--coral); transform: rotate(3deg); }
+        .room-card-bottom { justify-content: flex-start; gap: 12px; padding-top: 14px; color: #e9e3d6; }
+        .player-stack { display: flex; padding-left: 3px; }
+        .player-stack span { display: grid; width: 25px; height: 25px; margin-left: -3px; place-items: center; border: 2px solid #172b3b; border-radius: 50%; background: #d98b69; color: #172b3b; font-size: 9px; font-weight: 700; }
+        .player-stack span:nth-child(2) { background: #e3bd68; }
+        .player-stack span:nth-child(3) { background: #779d8e; }
+        .room-card-bottom p { flex: 1; margin: 0; color: #abb4b5; font-size: 10px; line-height: 1.5; }
+        .room-card-bottom strong { color: #f5eddf; font-weight: 600; }
+        .room-live { color: #bdc5bd; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 9px; white-space: nowrap; }
+        .room-live i { display: inline-block; width: 6px; height: 6px; margin-right: 3px; border-radius: 50%; background: #82b798; }
+        .scene-doodle { position: absolute; top: -30px; right: 0; color: var(--coral); font-family: Georgia, serif; font-size: 41px; transform: rotate(10deg); }
+        .scene-caption { margin: 25px 0 0 7px; color: #747a76; font-family: Georgia, 'Times New Roman', serif; font-size: 13px; font-style: italic; }
 
-        .mosaic-hero {
-          border: 2px dashed rgba(244,185,66,0.45);
-          background: transparent;
-          animation:
-            dash-pulse 1.8s ease-in-out infinite,
-            drop-in 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) 1.55s both;
+        .games-section { padding-block: 35px 67px; border-top: 1px solid rgba(23, 40, 58, 0.18); }
+        .games-heading { display: flex; align-items: end; justify-content: space-between; gap: 25px; margin-bottom: 25px; }
+        .games-heading h2 { margin: 10px 0 0; font-size: clamp(27px, 3.2vw, 38px); line-height: 1.1; }
+        .games-heading > p { max-width: 270px; margin: 0 0 3px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+        .game-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid #d6cdbd; border-bottom: 1px solid #d6cdbd; }
+        .game-row { display: grid; grid-template-columns: 20px 76px 1fr; grid-template-rows: 76px auto; align-items: center; column-gap: 13px; padding: 18px 20px 17px 0; }
+        .game-row + .game-row { padding-left: 20px; border-left: 1px solid #d6cdbd; }
+        .game-number { align-self: start; padding-top: 4px; color: #8d887d; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 9px; }
+        .game-art { position: relative; display: grid; width: 76px; height: 76px; overflow: hidden; place-items: center; }
+        .jigsaw-art { background: #dcae59; }
+        .jigsaw-sky { position: absolute; inset: 0 0 38% 0; background: #e88b64; }
+        .jigsaw-sun { position: absolute; top: 10px; right: 11px; width: 17px; height: 17px; border-radius: 50%; background: #f4e3b8; }
+        .jigsaw-hill { position: absolute; right: -5px; bottom: -7px; left: -5px; height: 43px; border-radius: 50% 50% 0 0; background: #547a69; transform: rotate(-9deg); }
+        .jigsaw-piece { position: absolute; z-index: 1; top: 28px; left: 24px; width: 29px; height: 30px; border: 2px solid #f3eddf; background: #e1b34d; }
+        .jigsaw-piece::after { position: absolute; top: 7px; right: -7px; width: 11px; height: 11px; border-radius: 50%; background: #e1b34d; border-right: 2px solid #f3eddf; content: ""; }
+        .jigsaw-seam { position: absolute; z-index: 2; background: #f3eddf; }
+        .jigsaw-seam-vertical { top: 0; bottom: 0; left: 38px; width: 2px; }
+        .jigsaw-seam-horizontal { top: 38px; right: 0; left: 0; height: 2px; }
+        .sudoku-art { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); border: 2px solid #315b5a; background: #f8f2e7; color: #315b5a; font-family: Georgia, serif; font-size: 13px; }
+        .sudoku-art span { display: grid; width: 100%; height: 100%; place-items: center; border-right: 1px solid #aeb9a8; border-bottom: 1px solid #aeb9a8; }
+        .sudoku-art span:nth-child(4n) { border-right: 0; }
+        .sudoku-art span:nth-child(n+13) { border-bottom: 0; }
+        .sudoku-art span:nth-child(6), .sudoku-art span:nth-child(11) { background: #e5d7b6; }
+        .mines-art { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 2px; padding: 5px; background: #d9d3c4; color: #466d79; font-family: var(--font-geist-mono), monospace; font-size: 10px; font-weight: 700; }
+        .mines-art span { display: grid; width: 100%; height: 100%; place-items: center; background: #f4eddf; }
+        .mines-art .mine-cell { background: #e47757; color: #17283a; font-size: 13px; }
+        .game-copy { align-self: center; }
+        .game-copy h3 { margin: 0 0 5px; font-family: Georgia, 'Times New Roman', serif; font-size: 19px; font-weight: 600; letter-spacing: -0.03em; }
+        .game-copy p { margin: 0; color: #65717a; font-size: 11px; line-height: 1.6; }
+        .game-note { grid-column: 2 / -1; margin-top: 12px; color: #916c32; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase; }
+        .landing-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-block: 0 34px; }
+        .landing-footer p { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 18px; font-style: italic; }
+        .landing-footer a { color: var(--ink); font-size: 12px; font-weight: 700; text-decoration: none; }
+        .landing-footer a span { padding-left: 5px; color: var(--coral); }
+
+        @media (max-width: 760px) {
+          .landing-header, .landing-hero, .games-section, .landing-footer { width: min(100% - 40px, 560px); }
+          .landing-header { min-height: 70px; }
+          .landing-brand { font-size: 17px; }
+          .landing-nav { gap: 16px; font-size: 12px; }
+          .landing-hero { grid-template-columns: 1fr; gap: 47px; padding-block: 58px 63px; }
+          .hero-copy { max-width: 560px; }
+          .hero-copy h1 { font-size: clamp(49px, 11vw, 70px); }
+          .room-scene { width: min(100%, 520px); margin-inline: auto; }
+          .games-section { padding-top: 30px; }
+          .games-heading { align-items: start; flex-direction: column; gap: 10px; }
+          .games-heading > p { max-width: 380px; }
+          .game-list { grid-template-columns: 1fr; }
+          .game-row { grid-template-columns: 24px 76px minmax(0, 1fr) auto; grid-template-rows: 76px; column-gap: 12px; padding: 14px 0; }
+          .game-row + .game-row { padding-left: 0; border-top: 1px solid #d6cdbd; border-left: 0; }
+          .game-number { align-self: center; padding-top: 0; }
+          .game-note { grid-column: 4; grid-row: 1; max-width: 85px; margin: 0; text-align: right; line-height: 1.5; }
+          .game-copy h3 { font-size: 18px; }
+          .game-copy p { max-width: 280px; }
         }
-
-        @keyframes settle {
-          from { opacity: 0; transform: translate(var(--fx), var(--fy)) rotate(var(--fr)); }
-          to { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+        @media (max-width: 480px) {
+          .landing-header, .landing-hero, .games-section, .landing-footer { width: calc(100% - 32px); }
+          .landing-brand { gap: 7px; font-size: 15px; }
+          .landing-brand svg { width: 31px; height: 31px; }
+          .landing-nav { gap: 12px; font-size: 11px; }
+          .landing-nav a:first-child { display: none; }
+          .landing-hero { gap: 38px; padding-top: 46px; }
+          .hero-copy h1 { font-size: clamp(45px, 12vw, 58px); }
+          .hero-description { font-size: 14px; }
+          .hero-footnote { margin-top: 27px; font-size: 8px; }
+          .room-scene { padding-inline: 4px; }
+          .room-card { padding: 15px 13px 12px; box-shadow: 7px 9px 0 #d9cdb6; }
+          .room-card-top h2 { font-size: 17px; }
+          .room-card-bottom { gap: 8px; }
+          .room-card-bottom p { font-size: 9px; }
+          .room-live { font-size: 8px; }
+          .game-row { grid-template-columns: 18px 62px minmax(0, 1fr); grid-template-rows: 64px auto; column-gap: 10px; }
+          .game-art { width: 62px; height: 62px; }
+          .game-note { grid-column: 3; grid-row: 2; margin-top: 5px; max-width: unset; text-align: left; }
+          .jigsaw-seam-vertical { left: 31px; }
+          .jigsaw-seam-horizontal { top: 31px; }
+          .jigsaw-piece { top: 23px; left: 20px; width: 24px; height: 24px; }
+          .jigsaw-piece::after { top: 5px; right: -7px; }
+          .landing-footer { align-items: start; flex-direction: column; padding-top: 5px; }
         }
-
-        @keyframes dash-pulse {
-          0%, 100% { border-color: rgba(244,185,66,0.25); }
-          50% { border-color: rgba(244,185,66,0.6); }
-        }
-
-        @keyframes drop-in {
-          0% { opacity: 0; transform: translateY(-130px) scale(0.5) rotate(-28deg); background-color: transparent; border-color: rgba(244,185,66,0.6); }
-          55% { opacity: 1; transform: translateY(6px) scale(1.06) rotate(3deg); background-color: #F4B942; border-color: #F4B942; }
-          78% { transform: translateY(-3px) scale(0.97); }
-          100% { transform: translateY(0) scale(1) rotate(0deg); background-color: #F4B942; border-color: #F4B942; box-shadow: 0 0 30px 8px rgba(244,185,66,0.35); }
-        }
-
         @media (prefers-reduced-motion: reduce) {
-          .mosaic-tile { animation: none !important; opacity: 1; transform: none; }
-          .mosaic-hero {
-            background: #F4B942;
-            border-color: #F4B942;
-            box-shadow: 0 0 30px 8px rgba(244,185,66,0.35);
-          }
-          .btn-piece:hover { transform: none; }
+          .action-primary { transition: none; }
+          .action-primary:hover { transform: none; }
         }
       `}</style>
     </main>

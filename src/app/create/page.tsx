@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRoom } from "@/context/RoomContext";
-import BrandLogo from "@/components/BrandLogo";
+import PageHeader from "@/components/PageHeader";
 
 function CreateRoomForm() {
   const router = useRouter();
@@ -33,49 +33,27 @@ function CreateRoomForm() {
   }
 
   return (
-    <main className="pt-app relative flex min-h-dvh h-auto w-full flex-col overflow-y-auto bg-[#0F1C2E] text-[#F5EFE0] pb-32">
-      {/* Ambient background glow */}
-      <div className="pointer-events-none fixed -left-24 -top-32 h-105 w-105 rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
-      <div className="pointer-events-none fixed -bottom-24 -right-16 h-95 w-95 rounded-full bg-[#F4B942]/8 blur-[100px]" />
-
-      {/* Floating brand link */}
-      <BrandLogo
-        className="group absolute left-5 top-5 z-20 flex items-center gap-2 sm:left-8 sm:top-6"
-        markClassName="h-7 w-7 transition-transform group-hover:scale-110"
-      />
-
-      {/* Connection status pill */}
-      <div className="absolute right-5 top-5 z-20 flex items-center gap-2 sm:right-8 sm:top-6">
-        <span
-          className="inline-block h-2.5 w-2.5 rounded-full shadow-sm"
-          style={{ background: isConnected ? "#34D399" : "#FF6B4A" }}
-        />
-        <span className="jb-mono text-xs uppercase tracking-wider text-[#8A96AE]">
-          {isConnected ? "Connected" : "Connecting…"}
-        </span>
-      </div>
-
-      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pt-24 sm:px-10 md:pt-16">
-        <div className="w-full max-w-4xl">
-          <div className="mb-6 text-center md:mb-8">
-            <span className="jb-mono text-xs uppercase tracking-[0.28em] text-[#F4B942]">
-              New Room
-            </span>
-            <h1 className="font-display mt-1.5 text-3xl font-bold leading-tight sm:text-4xl">
-              Set up your <span className="italic text-[#FF6B4A]">room</span>
+    <main className="paper-page flex w-full flex-col">
+      <PageHeader actionHref="/join" actionLabel="Join a room" connected={isConnected} status={isConnected ? "Connected" : "Connecting…"} />
+      <div className="paper-content paper-content-wide">
+        <div className="w-full">
+          <div className="setup-heading">
+            <span className="setup-kicker">New room</span>
+            <h1 className="setup-title">
+              Set up your <em>room</em>
             </h1>
-            <p className="mt-2 text-sm text-[#A8ADC4]">
+            <p className="setup-description">
               Set your name here, then choose a game, image, and mode in the room lobby.
             </p>
           </div>
 
           {error && (
-            <div className="mb-6 rounded-2xl border border-[#FF6B4A]/40 bg-[#FF6B4A]/15 px-4 py-3 text-center text-xs font-bold text-[#FFB4A0] shadow-sm">
+            <div className="setup-error mb-6 px-4 py-3 text-center text-sm font-semibold">
               {error}
             </div>
           )}
 
-          <div className="mx-auto grid w-full max-w-2xl grid-cols-1 items-end gap-6 sm:grid-cols-[1fr_auto]">
+          <div className="paper-form-card mx-auto grid w-full max-w-2xl grid-cols-1 items-end gap-6 sm:grid-cols-[1fr_auto]">
             <div>
               <label htmlFor="player-name" className="section-label">Your Name</label>
               <input
@@ -129,7 +107,7 @@ function CreateRoomForm() {
                 >
                   +
                 </button>
-                <span className="jb-mono ml-2 text-xs uppercase tracking-wider text-[#8A96AE]">
+                <span className="jb-mono ml-2 text-xs uppercase tracking-wider text-[#65717a]">
                   players
                 </span>
               </div>
@@ -138,7 +116,7 @@ function CreateRoomForm() {
             <button
               onClick={handleCreate}
               disabled={isCreating || !isConnected}
-              className="btn-piece btn-piece-primary w-full justify-center py-4 text-base font-bold shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+              className="btn-piece btn-piece-primary w-full justify-center py-4 text-base font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
             >
               {isCreating ? "Creating Room…" : "Create Room"}
             </button>
@@ -148,7 +126,6 @@ function CreateRoomForm() {
 
       <style>{`
         .pt-app { font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif; }
-        .font-display { font-family: Georgia, 'Times New Roman', serif; font-optical-sizing: auto; }
         .jb-mono { font-family: var(--font-geist-mono), ui-monospace, monospace; }
 
         .section-label {

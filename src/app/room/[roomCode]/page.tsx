@@ -11,6 +11,7 @@ import { PuzzleConfig, PuzzlePieceData } from "@/types/puzzle";
 import { GameDifficulty, Player, RoomGame } from "@/types/room";
 import MiniGameRoom from "@/components/MiniGameRoom";
 import BrandLogo, { BrandMark } from "@/components/BrandLogo";
+import PageHeader from "@/components/PageHeader";
 
 /* ──────────────────────────────────────────────────────────
  * THEME COLOR PALETTES & TYPE DEFINITION
@@ -834,74 +835,72 @@ export default function RoomPage() {
   // Loading state — room data hasn't synced from the server yet
   if (!room) {
     return (
-      <main className="flex min-h-dvh w-full items-center justify-center bg-[#0F1720] px-5 py-10 text-[#F3F4F6]">
-        <div className="w-full max-w-md rounded-3xl border border-[#26364A] bg-[#192533] p-7 text-center shadow-2xl sm:p-9">
-          <BrandLogo
-            className="mb-8 justify-center"
-            markClassName="h-8 w-8"
-            labelClassName="font-display text-lg font-bold tracking-wide text-[#F3F4F6]"
-          />
-          <BrandMark className={`mx-auto mb-4 h-10 w-10 ${isConnected ? "" : "animate-pulse"}`} />
-          <h1 className="text-xl font-bold">
-            {isConnected ? "Join this room" : connectionTimedOut ? "Can’t reach the game server" : "Connecting to the game server…"}
-          </h1>
-          <p className="mt-2 text-sm leading-relaxed text-[#9CA3AF]">
-            {isConnected
-              ? `Enter your name to join room ${roomCode}.`
-              : connectionTimedOut
-                ? "The room is not loading because the multiplayer server is unavailable. Check NEXT_PUBLIC_SOCKET_URL in Vercel and make sure your Socket.IO server is running."
-                : "Connecting you to the multiplayer server. This should only take a moment."}
-          </p>
-
-          {entryError && (
-            <p role="alert" className="mt-4 rounded-xl border border-[#FF6B4A]/40 bg-[#FF6B4A]/10 px-4 py-3 text-sm text-[#FFB4A0]">
-              {entryError}
+      <main className="paper-page flex w-full flex-col">
+        <PageHeader actionHref="/join" actionLabel="Join a room" connected={isConnected} status={isConnected ? "Connected" : "Connecting…"} />
+        <div className="paper-content">
+          <div className="paper-form-card text-center">
+            <BrandMark className={`mx-auto mb-4 h-10 w-10 ${isConnected ? "" : "animate-pulse"}`} />
+            <h1 className="setup-title !mt-0 !text-3xl">
+              {isConnected ? "Join this room" : connectionTimedOut ? "Can’t reach the game server" : "Connecting to the game server…"}
+            </h1>
+            <p className="setup-description">
+              {isConnected
+                ? `Enter your name to join room ${roomCode}.`
+                : connectionTimedOut
+                  ? "The room is not loading because the multiplayer server is unavailable. Check NEXT_PUBLIC_SOCKET_URL in Vercel and make sure your Socket.IO server is running."
+                  : "Connecting you to the multiplayer server. This should only take a moment."}
             </p>
-          )}
 
-          {isConnected ? (
-            <form
-              className="mt-6 flex flex-col gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void joinRoomFromLink();
-              }}
-            >
-              <label htmlFor="direct-room-name" className="sr-only">Your name</label>
-              <input
-                id="direct-room-name"
-                value={entryName}
-                onChange={(event) => setEntryName(event.target.value)}
-                maxLength={20}
-                placeholder="Your display name"
-                className="w-full rounded-xl border border-[#34465D] bg-[#0F1720] px-4 py-3 text-white outline-none transition focus:border-[#FF6B4A]"
-              />
-              <button
-                type="submit"
-                disabled={isJoiningFromLink}
-                className="rounded-xl bg-[#FF6B4A] px-4 py-3 font-bold text-[#0F1720] transition hover:bg-[#ff8065] disabled:opacity-60"
+            {entryError && (
+              <p role="alert" className="setup-error mt-4 px-4 py-3 text-sm">
+                {entryError}
+              </p>
+            )}
+
+            {isConnected ? (
+              <form
+                className="mt-6 flex flex-col gap-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void joinRoomFromLink();
+                }}
               >
-                {isJoiningFromLink ? "Joining room…" : "Join Room"}
+                <label htmlFor="direct-room-name" className="sr-only">Your name</label>
+                <input
+                  id="direct-room-name"
+                  value={entryName}
+                  onChange={(event) => setEntryName(event.target.value)}
+                  maxLength={20}
+                  placeholder="Your display name"
+                  className="field-minimal"
+                />
+                <button
+                  type="submit"
+                  disabled={isJoiningFromLink}
+                  className="btn-piece btn-piece-primary justify-center px-4 py-3 font-bold disabled:opacity-60"
+                >
+                  {isJoiningFromLink ? "Joining room…" : "Join Room"}
+                </button>
+              </form>
+            ) : connectionTimedOut ? (
+              <button
+                type="button"
+                onClick={() => {
+                  socket.disconnect();
+                  socket.connect();
+                  setConnectionTimedOut(false);
+                  setConnectionAttempt((attempt) => attempt + 1);
+                }}
+                className="btn-piece room-lobby-button mt-6 w-full justify-center border px-4 py-3 font-semibold"
+              >
+                Retry connection
               </button>
-            </form>
-          ) : connectionTimedOut ? (
-            <button
-              type="button"
-              onClick={() => {
-                socket.disconnect();
-                socket.connect();
-                setConnectionTimedOut(false);
-                setConnectionAttempt((attempt) => attempt + 1);
-              }}
-              className="mt-6 w-full rounded-xl border border-[#34465D] px-4 py-3 font-semibold transition hover:bg-white/5"
-            >
-              Retry connection
-            </button>
-          ) : null}
+            ) : null}
 
-          <Link href="/" className="mt-5 inline-block text-sm font-semibold text-[#F4B942] hover:underline">
-            Back to home
-          </Link>
+            <Link href="/" className="setup-link mt-5 inline-block text-sm">
+              Back to home
+            </Link>
+          </div>
         </div>
       </main>
     );
@@ -917,33 +916,33 @@ export default function RoomPage() {
        * WAITING LOBBY VIEW (Shown when room status is 'lobby')
        * ────────────────────────────────────────────────────────── */}
       {isLobby && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F1720]/95 backdrop-blur-md overflow-y-auto">
-          <div className="flex flex-col items-center text-center w-full max-w-lg rounded-3xl border border-[#26364A] bg-[#192533] p-6 sm:p-8 shadow-2xl my-auto">
+        <div className="room-lobby-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+          <div className="room-lobby-card flex w-full max-w-lg flex-col items-center p-6 text-center sm:p-8 my-auto">
             {/* Top Game Logo */}
             <div className="flex items-center justify-between w-full mb-4">
               <BrandLogo
                 className="transition-transform hover:scale-105"
                 markClassName="h-8 w-8"
-                labelClassName="font-display text-xl font-bold tracking-wide text-[#F3F4F6]"
+                labelClassName="room-lobby-heading font-display text-xl font-bold tracking-wide"
               />
               <button
                 onClick={handleLeaveGroup}
-                className="text-xs font-semibold text-[#9CA3AF] hover:text-red-400 px-3 py-1.5 rounded-xl border border-white/5 hover:border-red-500/30 transition-all"
+                className="room-lobby-button rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all hover:text-red-700"
               >
                 Leave Room
               </button>
             </div>
 
             {/* Room Code Card */}
-            <div className="w-full rounded-2xl border border-[#26364A] bg-[#0F1720] p-4 mb-5">
-              <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF]">Room Code</span>
+            <div className="room-lobby-panel-inset mb-5 w-full border p-4">
+              <span className="room-lobby-subtle text-xs uppercase font-bold tracking-widest">Room Code</span>
               <div className="flex items-center justify-center gap-3 mt-1">
-                <span className="font-mono text-4xl font-extrabold text-[#F59E0B] tracking-[0.25em]">
+                <span className="room-lobby-accent font-mono text-4xl font-extrabold tracking-[0.25em]">
                   {room?.code}
                 </span>
                 <button
                   onClick={copyCodeToClipboard}
-                  className="rounded-xl bg-[#20382E] px-3 py-2 text-xs font-bold text-white transition-all hover:scale-105 active:scale-95"
+                  className="room-lobby-button-primary px-3 py-2 text-xs font-bold transition-all"
                 >
                   {copiedCode ? "✓ Copied!" : "📋 Copy"}
                 </button>
@@ -951,8 +950,8 @@ export default function RoomPage() {
             </div>
 
             {/* Puzzle Details Summary & Host Customization */}
-            <div className="w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-4 mb-5 text-left">
-              <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF] block mb-2.5">Choose a Game</span>
+            <div className="room-lobby-panel mb-5 w-full border p-4 text-left">
+              <span className="room-lobby-subtle mb-2.5 block text-xs uppercase font-bold tracking-widest">Choose a Game</span>
               <div className="grid grid-cols-3 gap-2">
                 {([
                   { id: "jigsaw", icon: null, title: "Jigsaw" },
@@ -965,11 +964,7 @@ export default function RoomPage() {
                     onClick={() => isHost && socket.emit("change_game", { roomCode: room.code, game: game.id as RoomGame })}
                     disabled={!isHost}
                     aria-pressed={(room.game ?? "jigsaw") === game.id}
-                    className={`rounded-xl border px-2 py-3 text-center transition-colors disabled:cursor-not-allowed ${
-                      (room.game ?? "jigsaw") === game.id
-                        ? "border-[#FF6B4A] bg-[#FF6B4A]/15 text-white"
-                        : "border-[#26364A] bg-[#0F1720] text-[#9CA3AF] hover:border-[#667085]"
-                    }`}
+                    className="room-lobby-choice min-h-20 w-full border px-2 py-3 text-center transition-colors disabled:cursor-not-allowed"
                   >
                     <span className="flex justify-center text-xl">
                       {game.id === "jigsaw" ? <BrandMark className="h-6 w-6" /> : game.icon}
@@ -978,25 +973,25 @@ export default function RoomPage() {
                   </button>
                 ))}
               </div>
-              {!isHost && <p className="mt-2 text-center text-[10px] text-[#9CA3AF]">Only the host can choose the game.</p>}
+              {!isHost && <p className="room-lobby-subtle mt-2 text-center text-[10px]">Only the host can choose the game.</p>}
             </div>
 
             {/* Puzzle Details Summary & Host Customization */}
             {(room.game ?? "jigsaw") === "jigsaw" && room.config && (
-              <div className="w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-3 mb-5">
+              <div className="room-lobby-panel mb-5 w-full border p-3">
                 <div className="flex items-center gap-4">
                   <div className="h-16 w-24 rounded-xl overflow-hidden border border-[#26364A] shrink-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={room.config.imageUrl} alt="Puzzle" className="h-full w-full object-cover" />
                   </div>
-                  <div className="text-left truncate flex-1">
-                    <h3 className="font-bold text-sm text-[#F3F4F6] truncate">{room.config.imageTitle}</h3>
-                    <p className="text-xs text-[#9CA3AF] mt-0.5">{room.config.cols}×{room.config.rows} ({room.config.totalPieces} Pieces)</p>
+                  <div className="min-w-0 flex-1 truncate text-left">
+                    <h3 className="room-lobby-heading truncate text-sm font-bold">{room.config.imageTitle}</h3>
+                    <p className="room-lobby-subtle mt-0.5 text-xs">{room.config.cols}×{room.config.rows} ({room.config.totalPieces} Pieces)</p>
                   </div>
                   {isHost && (
                     <button
                       onClick={() => setShowLobbySettings((v) => !v)}
-                      className="px-2.5 py-1.5 rounded-lg border border-[#26364A] bg-[#0F1720] text-xs font-bold text-[#F59E0B] hover:border-[#F59E0B]/50 transition-all shrink-0"
+                      className="room-lobby-button room-lobby-accent shrink-0 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition-all"
                     >
                       {showLobbySettings ? "Done" : "Change"}
                     </button>
@@ -1005,8 +1000,8 @@ export default function RoomPage() {
 
                 {/* Host Puzzle Settings Dropdown */}
                 {isHost && showLobbySettings && (
-                  <div className="mt-3 pt-3 border-t border-[#26364A] text-left animate-in fade-in duration-200">
-                    <span className="text-[11px] uppercase font-bold tracking-wider text-[#9CA3AF] block mb-2">Select Image</span>
+                  <div className="mt-3 border-t border-[#d6cdbd] pt-3 text-left animate-in fade-in duration-200">
+                    <span className="room-lobby-subtle mb-2 block text-[11px] uppercase font-bold tracking-wider">Select Image</span>
                     <div className="grid grid-cols-3 gap-2 mb-3 max-h-32 overflow-y-auto pr-1">
                       {PRESET_IMAGES.map((img) => (
                         <button
@@ -1027,7 +1022,7 @@ export default function RoomPage() {
                       ))}
                     </div>
 
-                    <span className="text-[11px] uppercase font-bold tracking-wider text-[#9CA3AF] block mb-2">Select Difficulty</span>
+                    <span className="room-lobby-subtle mb-2 block text-[11px] uppercase font-bold tracking-wider">Select Difficulty</span>
                     <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                       {DIFFICULTY_PRESETS.map((d) => (
                         <button
@@ -1036,7 +1031,7 @@ export default function RoomPage() {
                           className={`py-1.5 px-2 rounded-lg border text-center text-xs transition-all ${
                             room.config?.totalPieces === d.total
                               ? "bg-[#F59E0B] border-[#F59E0B] text-black font-extrabold shadow-sm"
-                              : "bg-[#0F1720] border-[#26364A] text-[#9CA3AF] hover:text-white hover:border-[#3E526A]"
+                              : "bg-[#fffaf0] border-[#d6cdbd] text-[#65717a] hover:text-[#17283a] hover:border-[#e86d4d]"
                           }`}
                         >
                           <div className="font-bold">{d.total} pcs</div>
@@ -1050,8 +1045,8 @@ export default function RoomPage() {
             )}
 
             {(room.game === "sudoku" || room.game === "minesweeper") && (
-              <div className="mb-5 w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-4 text-left">
-                <span className="mb-2.5 block text-xs font-bold uppercase tracking-widest text-[#9CA3AF]">
+              <div className="room-lobby-panel mb-5 w-full border p-4 text-left">
+                <span className="room-lobby-subtle mb-2.5 block text-xs font-bold uppercase tracking-widest">
                   {room.game === "sudoku" ? "Sudoku difficulty" : "Minefield size"}
                 </span>
                 <div className="grid grid-cols-3 gap-2">
@@ -1073,11 +1068,7 @@ export default function RoomPage() {
                       onClick={() => isHost && socket.emit("change_game_difficulty", { roomCode: room.code, difficulty: difficulty.id as GameDifficulty })}
                       disabled={!isHost}
                       aria-pressed={room.gameDifficulty === difficulty.id}
-                      className={`min-h-16 rounded-xl border px-2 py-2 text-center transition-colors disabled:cursor-not-allowed ${
-                        room.gameDifficulty === difficulty.id
-                          ? "border-[#F4B942] bg-[#F4B942]/10 text-white"
-                          : "border-[#26364A] bg-[#0F1720] text-[#9CA3AF] hover:border-[#667085]"
-                      }`}
+                      className="room-lobby-choice min-h-16 border px-2 py-2 text-center transition-colors disabled:cursor-not-allowed"
                     >
                       <span className="block text-xs font-bold">{difficulty.title}</span>
                       <span className="mt-1 block text-[9px] leading-tight">{difficulty.detail}</span>
@@ -1088,17 +1079,14 @@ export default function RoomPage() {
             )}
 
             {/* Game Mode Selector */}
-            <div className="w-full rounded-2xl border border-[#26364A] bg-[#16222F] p-4 mb-5 text-left">
-              <span className="text-xs uppercase font-bold tracking-widest text-[#9CA3AF] block mb-2.5">Game Mode</span>
+            <div className="room-lobby-panel mb-5 w-full border p-4 text-left">
+              <span className="room-lobby-subtle mb-2.5 block text-xs uppercase font-bold tracking-widest">Game Mode</span>
               <div className="grid grid-cols-2 gap-2.5">
                 <button
                   onClick={() => isHost && socket?.emit('change_mode', { roomCode: room.code, mode: 'cooperative' })}
                   disabled={!isHost || room.status !== 'lobby'}
-                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                    room.mode === 'cooperative' || !room.mode
-                      ? 'bg-[#20382E] border-[#34D399] text-white font-bold shadow-md'
-                      : 'bg-[#0F1720] border-[#26364A] text-[#9CA3AF] hover:bg-[#16222F]/50'
-                  }`}
+                  aria-pressed={room.mode === "cooperative" || !room.mode}
+                  className="room-lobby-choice flex flex-col items-center justify-center border p-3 text-center transition-all"
                 >
                   <BrandMark className="h-6 w-6" />
                   <span className="text-xs font-bold mt-1">Play Together</span>
@@ -1107,11 +1095,8 @@ export default function RoomPage() {
                 <button
                   onClick={() => isHost && socket?.emit('change_mode', { roomCode: room.code, mode: 'competitive' })}
                   disabled={!isHost || room.status !== 'lobby'}
-                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
-                    room.mode === 'competitive'
-                      ? 'bg-[#4C3B1C] border-[#F59E0B] text-white font-bold shadow-md'
-                      : 'bg-[#0F1720] border-[#26364A] text-[#9CA3AF] hover:bg-[#16222F]/50'
-                  }`}
+                  aria-pressed={room.mode === "competitive"}
+                  className="room-lobby-choice flex flex-col items-center justify-center border p-3 text-center transition-all"
                 >
                   <span className="text-xl">⚔️</span>
                   <span className="text-xs font-bold mt-1">Competition</span>
@@ -1119,7 +1104,7 @@ export default function RoomPage() {
                 </button>
               </div>
               {!isHost && (
-                <p className="text-[10px] text-[#9CA3AF] mt-2 text-center">
+                <p className="room-lobby-subtle mt-2 text-center text-[10px]">
                   * Only the Host can change the game mode.
                 </p>
               )}
@@ -1127,22 +1112,22 @@ export default function RoomPage() {
 
             {/* Connected Players List */}
             <div className="w-full mb-6">
-              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">
+              <div className="room-lobby-subtle mb-3 flex items-center justify-between text-xs font-bold uppercase tracking-wider">
                 <span>Party Members</span>
                 <span>{playerList.length} / {room?.maxPlayers || 6}</span>
               </div>
               <div className="grid grid-cols-2 gap-2.5 max-h-40 overflow-y-auto pr-1">
                 {playerList.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2.5 rounded-xl border border-[#26364A] bg-[#16222F] p-2.5 text-left">
+                  <div key={p.id} className="room-lobby-player flex items-center gap-2.5 rounded-xl border p-2.5 text-left">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm border border-white/10 shrink-0" style={{ backgroundColor: p.color + "40" }}>
                       {p.avatar}
                     </div>
                     <div className="truncate text-xs flex-1">
-                      <span className="font-semibold text-[#F3F4F6] truncate block">
+                      <span className="room-lobby-heading block truncate font-semibold">
                         {p.name}
                         {p.id === localPlayerId && " (You)"}
                       </span>
-                      {p.isHost && <span className="text-[10px] font-bold text-[#F59E0B]">HOST</span>}
+                      {p.isHost && <span className="room-lobby-accent text-[10px] font-bold">HOST</span>}
                     </div>
                   </div>
                 ))}
@@ -1153,13 +1138,12 @@ export default function RoomPage() {
             {isHost ? (
               <button
                 onClick={handleStartGame}
-                className="w-full rounded-2xl py-4 px-8 text-lg font-extrabold text-white shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
-                style={{ backgroundColor: "#20382E" }}
+                className="room-lobby-button-primary w-full px-8 py-4 text-lg font-extrabold transition-all"
               >
                 🎮 Start Game
               </button>
             ) : (
-              <div className="flex items-center gap-2 text-sm font-semibold text-[#F59E0B] animate-pulse">
+              <div className="room-lobby-accent flex items-center gap-2 text-sm font-semibold animate-pulse">
                 <span>⏳</span> Waiting for host to start game…
               </div>
             )}

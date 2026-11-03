@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useRoom } from "@/context/RoomContext";
-import BrandLogo from "@/components/BrandLogo";
+import PageHeader from "@/components/PageHeader";
 
 function JoinRoomForm() {
   const router = useRouter();
@@ -38,49 +38,27 @@ function JoinRoomForm() {
   }
 
   return (
-    <main className="pt-app relative flex min-h-dvh h-auto w-full flex-col overflow-y-auto bg-[#0F1C2E] text-[#F5EFE0] pb-28">
-      {/* Ambient background glow */}
-      <div className="pointer-events-none fixed -left-24 -top-32 h-105 w-105 rounded-full bg-[#FF6B4A]/10 blur-[110px]" />
-      <div className="pointer-events-none fixed -bottom-24 -right-16 h-95 w-95 rounded-full bg-[#F4B942]/8 blur-[100px]" />
-
-      {/* Top brand logo */}
-      <BrandLogo
-        className="group absolute left-5 top-5 z-20 flex items-center gap-2 sm:left-8 sm:top-6"
-        markClassName="h-7 w-7 transition-transform group-hover:scale-110"
-      />
-
-      {/* Connection status pill */}
-      <div className="absolute right-5 top-5 z-20 flex items-center gap-2 sm:right-8 sm:top-6">
-        <span
-          className="inline-block h-2.5 w-2.5 rounded-full shadow-sm"
-          style={{ background: isConnected ? "#34D399" : "#FF6B4A" }}
-        />
-        <span className="jb-mono text-xs uppercase tracking-wider text-[#8A96AE]">
-          {isConnected ? "Connected" : "Connecting…"}
-        </span>
-      </div>
-
-      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pt-24 sm:px-6 md:pt-16">
-        <div className="w-full max-w-sm">
-          <div className="mb-6 text-center">
-            <span className="jb-mono text-xs uppercase tracking-[0.28em] text-[#F4B942]">
-              Join Room
-            </span>
-            <h1 className="font-display mt-2 text-3xl font-bold leading-tight sm:text-4xl">
-              Hop into a <span className="italic text-[#FF6B4A]">puzzle</span>
+    <main className="paper-page flex w-full flex-col">
+      <PageHeader actionHref="/create" actionLabel="Create a room" connected={isConnected} status={isConnected ? "Connected" : "Connecting…"} />
+      <div className="paper-content">
+        <div className="w-full">
+          <div className="setup-heading">
+            <span className="setup-kicker">Join a room</span>
+            <h1 className="setup-title">
+              Come solve a <em>puzzle.</em>
             </h1>
-            <p className="mt-2 text-sm text-[#A8ADC4]">
+            <p className="setup-description">
               Enter the 4-digit code shared by your host
             </p>
           </div>
 
           {error && (
-            <div className="mb-5 rounded-2xl border border-[#FF6B4A]/40 bg-[#FF6B4A]/15 px-4 py-3 text-center text-xs font-bold text-[#FFB4A0] shadow-sm">
+            <div className="setup-error mb-5 px-4 py-3 text-center text-sm font-semibold">
               {error}
             </div>
           )}
 
-          <div className="flex flex-col gap-5">
+          <div className="paper-form-card flex flex-col gap-5">
             <div>
               <label htmlFor="player-name" className="section-label">Your Name</label>
               <input
@@ -103,22 +81,22 @@ function JoinRoomForm() {
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 maxLength={6}
-                className="field-minimal jb-mono text-center text-3xl font-bold tracking-[0.3em] text-[#F4B942]"
+                className="field-minimal jb-mono text-center text-3xl font-bold tracking-[0.3em]"
               />
             </div>
 
             <button
               onClick={handleJoin}
               disabled={isJoining || !isConnected}
-              className="btn-piece btn-piece-primary mt-3 w-full justify-center py-4 text-base font-bold shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-piece btn-piece-primary mt-3 w-full justify-center py-4 text-base font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isJoining ? "Joining room…" : "Enter Room"}
             </button>
           </div>
 
-          <p className="mt-6 text-center text-sm text-[#6C7A94]">
+          <p className="mt-6 text-center text-sm text-[#65717a]">
             Don&apos;t have a code?{" "}
-            <Link href="/create" className="font-semibold text-[#FF6B4A] underline decoration-[#FF6B4A]/40 underline-offset-4 hover:decoration-[#FF6B4A]">
+            <Link href="/create" className="setup-link">
               Create your own room
             </Link>
           </p>
@@ -127,7 +105,6 @@ function JoinRoomForm() {
 
       <style>{`
         .pt-app { font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif; }
-        .font-display { font-family: Georgia, 'Times New Roman', serif; font-optical-sizing: auto; }
         .jb-mono { font-family: var(--font-geist-mono), ui-monospace, monospace; }
 
         .section-label {
